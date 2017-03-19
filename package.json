@@ -1,0 +1,9 @@
+{
+	"name": "react-es6-class-migration",
+	"version": "0.0.1",
+	"devDependencies": {
+		"babylon": "6.16.1",
+		"glob": "7.1.1",
+		"lodash": "4.17.4"
+	}
+}
