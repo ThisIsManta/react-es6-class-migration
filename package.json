@@ -1,7 +1,30 @@
 {
 	"name": "react-es6-class-migration",
+	"displayName": "Manta's React ES6 Class Migration",
 	"version": "0.0.1",
+	"publisher": "thisismanta",
+	"repository": {
+		"url": "https://github.com/ThisIsManta/react-es6-class-migration"
+	},
+	"engines": {
+		"vscode": "^1.11.0"
+	},
+	"activationEvents": [
+		"onLanguage:javascript"
+	],
+	"main": "./vscode.js",
+	"contributes": {
+		"commands": [
+			{
+				"command": "migrate-to-react-es6-class",
+				"title": "Migrate from React.createClass to React.Component"
+			}
+		]
+	},
 	"devDependencies": {
+		"vscode": "^1.1.0"
+	},
+	"dependencies": {
 		"babylon": "6.16.1",
 		"glob": "7.1.1",
 		"lodash": "4.17.4"
