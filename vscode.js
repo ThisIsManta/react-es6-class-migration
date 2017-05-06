@@ -1,5 +1,5 @@
 const vscode = require('vscode')
-const migrate = require('./migrate')
+const migrateReactClass = require('./migrateReactClass')
 
 function activate(context) {
 	context.subscriptions.push(vscode.commands.registerCommand('migrate-to-react-es6-class', () => {
@@ -8,7 +8,7 @@ function activate(context) {
 
 		try {
 			const originalCode = document.getText()
-			const modifiedCode = migrate(document.getText())
+			const modifiedCode = migrateReactClass(document.getText())
 
 			if (originalCode === modifiedCode) {
 				vscode.window.showInformationMessage('Nothing is to be migrated.')
@@ -19,9 +19,9 @@ function activate(context) {
 					edit.replace(editingRange, modifiedCode)
 				})
 
-				if (document.isUntitled === false) {
+				/*if (document.isUntitled === false) {
 					vscode.commands.executeCommand('vscode.executeFormatDocumentProvider', document.uri, { insertSpaces: true, tabSize: 2 })
-				}
+				}*/
 			}
 
 		} catch (error) {

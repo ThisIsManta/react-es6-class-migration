@@ -4,7 +4,7 @@ const fs = require('fs')
 const babylon = require('babylon')
 const glob = require('glob')
 const _ = require('lodash')
-const migrate = require('./migrate')
+const migrateReactClass = require('./migrateReactClass')
 
 const replaceOriginal = process.argv.find(argx => argx === '-r' || argx === '--replace')
 
@@ -15,7 +15,7 @@ _.chain(process.argv)
 	.flatten()
 	.forEach(path => {
 		const originalCode = fs.readFileSync(path, { encoding: 'utf-8' })
-		const modifiedCode = migrate(originalCode)
+		const modifiedCode = migrateReactClass(originalCode)
 
 		if (replaceOriginal) {
 			fs.writeFileSync(path, modifiedCode)

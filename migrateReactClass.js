@@ -65,7 +65,7 @@ const reactLifeCycleNames = [
 	'componentWillUnmount',
 ]
 
-function migrate(code) {
+function migrateReactClass(code) {
 	const tree = babylon.parse(code, {
 		sourceType: 'module',
 		plugins: ['classProperties', 'objectRestSpread', 'exportExtensions', 'dynamicImport', 'asyncGenerators', 'functionBind', 'jsx']
@@ -175,4 +175,4 @@ function findInCodeTree(source, target) {
 	}
 }
 
-module.exports = migrate
+module.exports = migrateReactClass
