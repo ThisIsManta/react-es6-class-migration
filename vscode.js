@@ -7,22 +7,16 @@ function activate(context) {
 		const document = editor.document
 
 		try {
-			const originalCode = document.getText()
-			const modifiedCode = migrateReactClass(document.getText())
+			let originalCode = document.getText()
+			let modifiedCode = originalCode
+			do {
+				[originalCode, modifiedCode] = [modifiedCode, migrateReactClass(originalCode)]
+			} while (originalCode !== modifiedCode);
 
-			if (originalCode === modifiedCode) {
-				vscode.window.showInformationMessage('Nothing is to be migrated.')
-
-			} else {
-				editor.edit(edit => {
-					const editingRange = document.validateRange(new vscode.Range(0, 0, Number.MAX_SAFE_INTEGER, Number.MAX_SAFE_INTEGER))
-					edit.replace(editingRange, modifiedCode)
-				})
-
-				/*if (document.isUntitled === false) {
-					vscode.commands.executeCommand('vscode.executeFormatDocumentProvider', document.uri, { insertSpaces: true, tabSize: 2 })
-				}*/
-			}
+			editor.edit(edit => {
+				const editingRange = document.validateRange(new vscode.Range(0, 0, Number.MAX_SAFE_INTEGER, Number.MAX_SAFE_INTEGER))
+				edit.replace(editingRange, modifiedCode)
+			})
 
 		} catch (error) {
 			vscode.window.showErrorMessage(error.message)
