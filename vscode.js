@@ -7,16 +7,15 @@ function activate(context) {
 		const document = editor.document
 
 		try {
-			let originalCode = document.getText()
-			let modifiedCode = originalCode
-			do {
-				[originalCode, modifiedCode] = [modifiedCode, migrateReactClass(originalCode)]
-			} while (originalCode !== modifiedCode);
+			const originalCode = document.getText()
+			const modifiedCode = migrateReactClass(originalCode)
 
-			editor.edit(edit => {
-				const editingRange = document.validateRange(new vscode.Range(0, 0, Number.MAX_SAFE_INTEGER, Number.MAX_SAFE_INTEGER))
-				edit.replace(editingRange, modifiedCode)
-			})
+			if (originalCode !== modifiedCode) {
+				editor.edit(edit => {
+					const editingRange = document.validateRange(new vscode.Range(0, 0, Number.MAX_SAFE_INTEGER, Number.MAX_SAFE_INTEGER))
+					edit.replace(editingRange, modifiedCode)
+				})
+			}
 
 		} catch (error) {
 			vscode.window.showErrorMessage(error.message)

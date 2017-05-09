@@ -14,11 +14,8 @@ _.chain(process.argv)
 	.map(para => glob.sync(para))
 	.flatten()
 	.forEach(path => {
-		let originalCode = fs.readFileSync(path, { encoding: 'utf-8' })
-		let modifiedCode = null
-		do {
-			[originalCode, modifiedCode] = [modifiedCode, migrateReactClass(originalCode)]
-		} while (originalCode !== modifiedCode);
+		const originalCode = fs.readFileSync(path, { encoding: 'utf-8' })
+		const modifiedCode = migrateReactClass(originalCode)
 
 		if (replaceOriginal) {
 			fs.writeFileSync(path, modifiedCode)

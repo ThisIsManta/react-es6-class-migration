@@ -54,6 +54,40 @@ const reactCreateClass = {
 	}]
 }
 
+const reactStatelessFunction = {
+	type: 'VariableDeclaration',
+	kind: 'const',
+	declarations: [{
+		type: 'VariableDeclarator',
+		init: {
+			type: 'ArrowFunctionExpression'
+		}
+	}]
+}
+
+const reactPropTypes = {
+	type: 'ExpressionStatement',
+	expression: {
+		type: 'AssignmentExpression',
+		operator: '=',
+		left: {
+			type: 'MemberExpression',
+			object: {
+				type: 'Identifier'
+			},
+			property: {
+				type: 'Identifier',
+				name: 'propTypes'
+			}
+		},
+		right: {
+			type: 'ObjectExpression'
+		}
+	}
+}
+const checkIfFunctionThatReturnReactOnly = node => node.declarations[0].init.body.type === 'JSXElement'
+const checkIfFunctionThatReturnReactLast = node => node.declarations[0].init.body.type === 'BlockStatement' && _.isMatch(_.last(node.declarations[0].init.body.body), { type: 'ReturnStatement', argument: { type: 'JSXElement' } })
+
 const reactLifeCycleNames = [
 	'componentWillMount',
 	'render',
@@ -65,58 +99,65 @@ const reactLifeCycleNames = [
 	'componentWillUnmount',
 ]
 
-function migrateReactClass(code) {
-	const tree = babylon.parse(code, {
+function parseTree(code) {
+	return babylon.parse(code, {
 		sourceType: 'module',
-		plugins: ['classProperties', 'objectRestSpread', 'exportExtensions', 'dynamicImport', 'asyncGenerators', 'functionBind', 'jsx']
+		plugins: ['jsx', 'flow', 'doExpressions', 'objectRestSpread', 'decorators', 'classProperties', 'exportExtensions', 'asyncGenerators', 'functionBind', 'functionSent', 'dynamicImport']
+	})
+}
+
+function migrateReactClass(code) {
+	let tree = parseTree(code)
+
+	const propTypeNodes = {}
+	_.forEachRight(findNodesInCodeTree(tree, node => _.isMatch(node, reactPropTypes)), node => {
+		propTypeNodes[node.expression.left.object.name] = code.substring(node.expression.right.start, node.expression.right.end)
+
+		code = code.substring(0, node.start) + code.substring(node.end)
 	})
 
-	const node = findInCodeTree(tree, reactCreateClass)
-	if (node === undefined) {
-		return code
+	if (_.isEmpty(propTypeNodes) === false) {
+		tree = parseTree(code)
 	}
 
-	const body = [
-		code.substring(0, node.start).trim(),
-		'',
-		`class ${node.declarations[0].id.name} extends React.Component {`,
-		`}`,
-		'',
-		code.substring(node.end).trim(),
-		'',
-	]
+	return findNodesInCodeTree(tree, node =>
+		_.isMatch(node, reactCreateClass) ||
+		_.isMatch(node, reactStatelessFunction) &&
+		(checkIfFunctionThatReturnReactOnly(node) || checkIfFunctionThatReturnReactLast(node))
+	).map((node, rank, list) => {
+		let body
+		if (_.isMatch(node, reactCreateClass)) {
+			body = node.declarations[0].init.arguments[0].properties.map(item => {
+				if (item.key.name === 'propTypes') {
+					return 'static propTypes = ' + code.substring(item.value.start, item.value.end)
 
-	const list = node.declarations[0].init.arguments[0].properties.map(item => {
-		if (item.key.name === 'propTypes') {
-			return 'static propTypes = ' + code.substring(item.value.start, item.value.end)
+				} else if (item.key.name === 'getDefaultProps') {
+					let temp
+					if (_.isMatch(item, methodThatReturnAnObject)) {
+						temp = item.body.body[0].argument
 
-		} else if (item.key.name === 'getDefaultProps') {
-			let temp
-			if (_.isMatch(item, methodThatReturnAnObject)) {
-				temp = item.body.body[0].argument
+					} else if (_.isMatch(item, functionThatReturnAnObject)) {
+						temp = item.value.body.body[0].argument
 
-			} else if (_.isMatch(item, functionThatReturnAnObject)) {
-				temp = item.value.body.body[0].argument
+					} else {
+						throw 'getDefaultProps'
+					}
 
-			} else {
-				throw 'getDefaultProps'
-			}
+					return 'static defaultProps = ' + code.substring(temp.start, temp.end)
 
-			return 'static defaultProps = ' + code.substring(temp.start, temp.end)
+				} else if (item.key.name === 'getInitialState') {
+					let temp
+					if (_.isMatch(item, methodThatReturnAnObject)) {
+						temp = item.body.body[0].argument
 
-		} else if (item.key.name === 'getInitialState') {
-			let temp
-			if (_.isMatch(item, methodThatReturnAnObject)) {
-				temp = item.body.body[0].argument
+					} else if (_.isMatch(item, functionThatReturnAnObject)) {
+						temp = item.value.body.body[0].argument
 
-			} else if (_.isMatch(item, functionThatReturnAnObject)) {
-				temp = item.value.body.body[0].argument
+					} else {
+						throw 'getInitialState'
+					}
 
-			} else {
-				throw 'getInitialState'
-			}
-
-			return `
+					return `
 				constructor (props) {
 				  super(props)
 
@@ -124,54 +165,83 @@ function migrateReactClass(code) {
 				}
 				`.trim()
 
-		} else if (_.isMatch(item, { type: 'ObjectMethod', body: { type: 'BlockStatement' } })) {
-			const methodName = item.key.name
-			const methodPara = item.params.map(para => para.name).join(', ')
-			const methodBody = code.substring(item.body.start, item.body.end)
+				} else if (_.isMatch(item, { type: 'ObjectMethod', body: { type: 'BlockStatement' } })) {
+					const methodName = item.key.name
+					const methodPara = item.params.map(para => para.name).join(', ')
+					const methodBody = code.substring(item.body.start, item.body.end)
 
-			if (reactLifeCycleNames.includes(methodName)) {
-				return `${methodName} (${methodPara}) ` + methodBody
+					if (reactLifeCycleNames.includes(methodName)) {
+						return `${methodName} (${methodPara}) ` + methodBody
 
-			} else {
-				return `${methodName} = (${methodPara}) => ` + methodBody
+					} else {
+						return `${methodName} = (${methodPara}) => ` + methodBody
+					}
+
+				} else {
+					throw item.key.name
+				}
+			})
+
+		} else if (_.isMatch(node, reactStatelessFunction)) {
+			const componentName = node.declarations[0].id.name
+
+			let propTypeCode = propTypeNodes[componentName]
+			if (propTypeCode) {
+				propTypeCode = 'static propTypes = ' + propTypeCode.trim()
 			}
 
-		} else {
-			throw item.key.name
+			let renderCode = ''
+			const renderNode = node.declarations[0].init.body
+			if (checkIfFunctionThatReturnReactOnly(node)) {
+				renderCode = 'render () {\nreturn (\n' + code.substring(renderNode.start, renderNode.end) + '\n)\n}\n'
+
+			} else if (checkIfFunctionThatReturnReactLast(node)) {
+				renderCode = 'render () ' + code.substring(renderNode.start, renderNode.end)
+			}
+
+			body = [
+				propTypeCode,
+				renderCode,
+			]
 		}
-	})
 
-	body.splice(3, 0, _.chain(list).compact().flattenDeep().value().join('\n\n'))
-
-	code = body.join('\n')
-
-	return code
+		return [
+			rank === 0 ? '' : code.substring(list[rank - 1].end, node.start).trim(),
+			'',
+			`class ${node.declarations[0].id.name} extends React.PureComponent {`,
+			_.chain(body).compact().flattenDeep().value().join('\n\n'),
+			'}',
+			'',
+			rank === list.length - 1 ? code.substring(node.end).trim() : '',
+		].join('\n')
+	}).join('')
 }
 
-function findInCodeTree(source, target) {
-	if (source === null) {
-		return undefined
+function findNodesInCodeTree(node, condition, parentNodes = []) {
+	if (node === null) {
+		return []
 
-	} else if (source['type'] === 'File' && source['program']) {
-		return findInCodeTree(source['program'], target)
+	} else if (node['type'] === 'File' && node['program']) {
+		return findNodesInCodeTree(node['program'], condition)
 
-	} else if (_.isMatch(source, target)) {
-		return source
+	} else if (condition(node, parentNodes)) {
+		return [node]
 
-	} else if (_.isArrayLike(source['body'])) {
-		for (let index = 0; index < source['body'].length; index++) {
-			const result = findInCodeTree(source['body'][index], target)
-			if (result !== undefined) {
-				return result
+	} else if (_.isArrayLike(node['body'])) {
+		let output = []
+		for (let index = 0; index < node['body'].length; index++) {
+			const result = findNodesInCodeTree(node['body'][index], condition, [...parentNodes, node])
+			if (result.length > 0) {
+				output.push(...result)
 			}
 		}
-		return undefined
+		return output
 
-	} else if (_.isObject(source['body'])) {
-		return findInCodeTree(source['body'], target)
+	} else if (_.isObject(node['body'])) {
+		return findNodesInCodeTree(node['body'], condition, [...parentNodes, node])
 
 	} else {
-		return undefined
+		return []
 	}
 }
 

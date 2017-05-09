@@ -13,6 +13,16 @@
 				"--extensionDevelopmentPath=${workspaceRoot}"
 			],
 			"stopOnEntry": false
+		},
+		{
+			"name": "Debug",
+			"type": "node",
+			"request": "launch",
+			"program": "${workspaceRoot}/command.js",
+			"args": [
+				"ButtonWithOption.react.js"
+			],
+			"cwd": "${workspaceRoot}"
 		}
 	]
 }
