@@ -35,21 +35,21 @@ const reactCreateClass = {
 	declarations: [{
 		type: 'VariableDeclarator',
 		init: {
-			type: 'CallExpression',
-			callee: {
-				type: 'MemberExpression',
-				object: {
-					type: 'Identifier',
-					name: 'React'
-				},
-				property: {
-					type: 'Identifier',
-					name: 'createClass'
-				}
-			},
-			arguments: [{
-				type: 'ObjectExpression'
-			}]
+	type: 'CallExpression',
+	callee: {
+		type: 'MemberExpression',
+		object: {
+			type: 'Identifier',
+			name: 'React'
+		},
+		property: {
+			type: 'Identifier',
+			name: 'createClass'
+		}
+	},
+	arguments: [{
+		type: 'ObjectExpression'
+	}]
 		}
 	}]
 }
@@ -122,8 +122,7 @@ function migrateReactClass(code) {
 
 	return findNodesInCodeTree(tree, node =>
 		_.isMatch(node, reactCreateClass) ||
-		_.isMatch(node, reactStatelessFunction) &&
-		(checkIfFunctionThatReturnReactOnly(node) || checkIfFunctionThatReturnReactLast(node))
+		_.isMatch(node, reactStatelessFunction) && (checkIfFunctionThatReturnReactOnly(node) || checkIfFunctionThatReturnReactLast(node))
 	).map((node, rank, list) => {
 		let body
 		if (_.isMatch(node, reactCreateClass)) {
@@ -167,7 +166,7 @@ function migrateReactClass(code) {
 
 				} else if (_.isMatch(item, { type: 'ObjectMethod', body: { type: 'BlockStatement' } })) {
 					const methodName = item.key.name
-					const methodPara = item.params.map(para => para.name).join(', ')
+					const methodPara = item.params.map(serialize).join(', ')
 					const methodBody = code.substring(item.body.start, item.body.end)
 
 					if (reactLifeCycleNames.includes(methodName)) {
@@ -206,7 +205,7 @@ function migrateReactClass(code) {
 		}
 
 		return [
-			rank === 0 ? '' : code.substring(list[rank - 1].end, node.start).trim(),
+			code.substring(rank === 0 ? 0 : list[rank - 1].end, node.start).trim(),
 			'',
 			`class ${node.declarations[0].id.name} extends React.PureComponent {`,
 			_.chain(body).compact().flattenDeep().value().join('\n\n'),
@@ -217,20 +216,23 @@ function migrateReactClass(code) {
 	}).join('')
 }
 
-function findNodesInCodeTree(node, condition, parentNodes = []) {
-	if (node === null) {
+function findNodesInCodeTree(node, condition, parentNode) {
+	if (!node) {
 		return []
+	}
 
-	} else if (node['type'] === 'File' && node['program']) {
+	node.parent = parentNode
+
+	if (node['type'] === 'File' && node['program']) {
 		return findNodesInCodeTree(node['program'], condition)
 
-	} else if (condition(node, parentNodes)) {
+	} else if (condition(node)) {
 		return [node]
 
 	} else if (_.isArrayLike(node['body'])) {
 		let output = []
 		for (let index = 0; index < node['body'].length; index++) {
-			const result = findNodesInCodeTree(node['body'][index], condition, [...parentNodes, node])
+			const result = findNodesInCodeTree(node['body'][index], condition, node)
 			if (result.length > 0) {
 				output.push(...result)
 			}
@@ -238,10 +240,25 @@ function findNodesInCodeTree(node, condition, parentNodes = []) {
 		return output
 
 	} else if (_.isObject(node['body'])) {
-		return findNodesInCodeTree(node['body'], condition, [...parentNodes, node])
+		return findNodesInCodeTree(node['body'], condition, node)
 
 	} else {
+
+
+
 		return []
+	}
+}
+
+function serialize(node) {
+	if (node.type === 'Identifier') {
+		return node.name
+
+	} else if (node.type === 'ObjectPattern') {
+		return '{ ' + node.properties.map(serialize).join(', ') + ' }'
+
+	} else if (node.type === 'ObjectProperty') {
+		return serialize(node.value)
 	}
 }
 
