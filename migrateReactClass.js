@@ -1,55 +1,34 @@
 const babylon = require('babylon')
 const _ = require('lodash')
 
-const methodThatReturnAnObject = {
-	type: 'ObjectMethod',
-	body: {
-		type: 'BlockStatement',
-		body: [{
-			type: 'ReturnStatement',
-			argument: {
-				type: 'ObjectExpression'
-			}
-		}]
-	}
-}
+const methodThatReturnAnObject = node =>
+	_.isMatch(node, { type: 'ObjectMethod', body: { type: 'BlockStatement' } }) &&
+	_.isMatch(_.last(node.body.body), { type: 'ReturnStatement' })
 
-const functionThatReturnAnObject = {
-	type: 'ObjectProperty',
-	value: {
-		type: 'FunctionExpression',
-		body: {
-			type: 'BlockStatement',
-			body: [{
-				type: 'ReturnStatement',
-				argument: {
-					type: 'ObjectExpression'
-				}
-			}]
-		}
-	}
-}
+const functionThatReturnAnObject = node =>
+	_.isMatch(node, { type: 'ObjectProperty', value: { type: 'FunctionExpression', body: { type: 'BlockStatement' } } }) &&
+	_.isMatch(_.last(node.value.body.body), { type: 'ReturnStatement' })
 
 const reactCreateClass = {
 	type: 'VariableDeclaration',
 	declarations: [{
 		type: 'VariableDeclarator',
 		init: {
-	type: 'CallExpression',
-	callee: {
-		type: 'MemberExpression',
-		object: {
-			type: 'Identifier',
-			name: 'React'
-		},
-		property: {
-			type: 'Identifier',
-			name: 'createClass'
-		}
-	},
-	arguments: [{
-		type: 'ObjectExpression'
-	}]
+			type: 'CallExpression',
+			callee: {
+				type: 'MemberExpression',
+				object: {
+					type: 'Identifier',
+					name: 'React'
+				},
+				property: {
+					type: 'Identifier',
+					name: 'createClass'
+				}
+			},
+			arguments: [{
+				type: 'ObjectExpression'
+			}]
 		}
 	}]
 }
@@ -132,10 +111,10 @@ function migrateReactClass(code) {
 
 				} else if (item.key.name === 'getDefaultProps') {
 					let temp
-					if (_.isMatch(item, methodThatReturnAnObject)) {
+					if (methodThatReturnAnObject(item)) {
 						temp = item.body.body[0].argument
 
-					} else if (_.isMatch(item, functionThatReturnAnObject)) {
+					} else if (functionThatReturnAnObject(item)) {
 						temp = item.value.body.body[0].argument
 
 					} else {
@@ -145,24 +124,31 @@ function migrateReactClass(code) {
 					return 'static defaultProps = ' + code.substring(temp.start, temp.end)
 
 				} else if (item.key.name === 'getInitialState') {
-					let temp
-					if (_.isMatch(item, methodThatReturnAnObject)) {
-						temp = item.body.body[0].argument
+					let statements
+					if (methodThatReturnAnObject(item)) {
+						statements = item.body.body
 
-					} else if (_.isMatch(item, functionThatReturnAnObject)) {
-						temp = item.value.body.body[0].argument
+					} else if (functionThatReturnAnObject(item)) {
+						statements = item.value.body.body
 
 					} else {
 						throw 'getInitialState'
 					}
 
-					return `
-				constructor (props) {
-				  super(props)
+					let initialization = ''
+					if (statements.length > 1) {
+						initialization = code.substring(statements[0].start, statements[statements.length - 2].end)
+					}
+					const state = code.substring(_.last(statements).argument.start, _.last(statements).argument.end)
 
-				  this.state = ${code.substring(temp.start, temp.end)}
-				}
-				`.trim()
+					return `
+						constructor (props) {
+						super(props)
+
+						${initialization}
+						this.state = ${state}
+						}
+					`.trim()
 
 				} else if (_.isMatch(item, { type: 'ObjectMethod', body: { type: 'BlockStatement' } })) {
 					const methodName = item.key.name
