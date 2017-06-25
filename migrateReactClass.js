@@ -156,16 +156,17 @@ function migrateReactClass(code) {
 					const methodName = item.key.name
 					const methodPara = item.params.map(serialize).join(', ')
 					const methodBody = code.substring(item.body.start, item.body.end)
+					const methodMods = item.async ? 'async' : ''
 
 					if (reactLifeCycleNames.includes(methodName)) {
-						return `${methodName} (${methodPara}) ` + methodBody
+						return `${methodMods} ${methodName} (${methodPara}) ` + methodBody
 
 					} else {
-						return `${methodName} = (${methodPara}) => ` + methodBody
+						return `${methodMods} ${methodName} = (${methodPara}) => ` + methodBody
 					}
 
 				} else {
-					throw item.key.name
+					throw 'Unknown property: ' + item.key.name
 				}
 			})
 
