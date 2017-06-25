@@ -181,10 +181,10 @@ function migrateReactClass(code) {
 			let renderCode = ''
 			const renderNode = node.declarations[0].init.body
 			if (checkIfFunctionReturnsReactOnly(node)) {
-				renderCode = 'render () {\nreturn (\n' + code.substring(renderNode.start, renderNode.end) + '\n)\n}\n'
+				renderCode = 'render () {\nreturn (\n' + code.substring(renderNode.start, renderNode.end).replace(/(\W)props\./g, '$1this.props.') + '\n)\n}\n'
 
 			} else if (checkIfFunctionReturnsReactLast(node)) {
-				renderCode = 'render () ' + code.substring(renderNode.start, renderNode.end)
+				renderCode = 'render () ' + code.substring(renderNode.start, renderNode.end).replace(/(\W)props\./g, '$1this.props.')
 			}
 
 			classBody = [
