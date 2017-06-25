@@ -64,8 +64,10 @@ const reactPropTypes = {
 		}
 	}
 }
-const checkIfFunctionThatReturnReactOnly = node => node.declarations[0].init.body.type === 'JSXElement'
-const checkIfFunctionThatReturnReactLast = node => node.declarations[0].init.body.type === 'BlockStatement' && _.isMatch(_.last(node.declarations[0].init.body.body), { type: 'ReturnStatement', argument: { type: 'JSXElement' } })
+
+const checkIfFunctionReturnsReactOnly = node => node.declarations[0].init.body.type === 'JSXElement'
+
+const checkIfFunctionReturnsReactLast = node => node.declarations[0].init.body.type === 'BlockStatement' && _.isMatch(_.last(node.declarations[0].init.body.body), { type: 'ReturnStatement', argument: { type: 'JSXElement' } })
 
 const reactLifeCycleNames = [
 	'componentWillMount',
@@ -89,7 +91,7 @@ function migrateReactClass(code) {
 	let tree = parseTree(code)
 
 	const propTypeNodes = {}
-	_.forEachRight(findNodesInCodeTree(tree, node => _.isMatch(node, reactPropTypes)), node => {
+	_.forEachRight(findNodes(tree, node => _.isMatch(node, reactPropTypes)), node => {
 		propTypeNodes[node.expression.left.object.name] = code.substring(node.expression.right.start, node.expression.right.end)
 
 		code = code.substring(0, node.start) + code.substring(node.end)
@@ -99,13 +101,13 @@ function migrateReactClass(code) {
 		tree = parseTree(code)
 	}
 
-	return findNodesInCodeTree(tree, node =>
+	return findNodes(tree, node =>
 		_.isMatch(node, reactCreateClass) ||
-		_.isMatch(node, reactStatelessFunction) && (checkIfFunctionThatReturnReactOnly(node) || checkIfFunctionThatReturnReactLast(node))
+		_.isMatch(node, reactStatelessFunction) && (checkIfFunctionReturnsReactOnly(node) || checkIfFunctionReturnsReactLast(node))
 	).map((node, rank, list) => {
-		let body
+		let classBody
 		if (_.isMatch(node, reactCreateClass)) {
-			body = node.declarations[0].init.arguments[0].properties.map(item => {
+			classBody = node.declarations[0].init.arguments[0].properties.map(item => {
 				if (item.key.name === 'propTypes') {
 					return 'static propTypes = ' + code.substring(item.value.start, item.value.end)
 
@@ -141,14 +143,14 @@ function migrateReactClass(code) {
 					}
 					const state = code.substring(_.last(statements).argument.start, _.last(statements).argument.end)
 
-					return `
-						constructor (props) {
-						super(props)
-
-						${initialization}
-						this.state = ${state}
-						}
-					`.trim()
+					return [
+						'constructor (props) {',
+						'super(props)',
+						'',
+						initialization,
+						'this.state = ' + state,
+						'}',
+					].join('\n').trim()
 
 				} else if (_.isMatch(item, { type: 'ObjectMethod', body: { type: 'BlockStatement' } })) {
 					const methodName = item.key.name
@@ -177,24 +179,38 @@ function migrateReactClass(code) {
 
 			let renderCode = ''
 			const renderNode = node.declarations[0].init.body
-			if (checkIfFunctionThatReturnReactOnly(node)) {
+			if (checkIfFunctionReturnsReactOnly(node)) {
 				renderCode = 'render () {\nreturn (\n' + code.substring(renderNode.start, renderNode.end) + '\n)\n}\n'
 
-			} else if (checkIfFunctionThatReturnReactLast(node)) {
+			} else if (checkIfFunctionReturnsReactLast(node)) {
 				renderCode = 'render () ' + code.substring(renderNode.start, renderNode.end)
 			}
 
-			body = [
+			classBody = [
 				propTypeCode,
 				renderCode,
 			]
 		}
 
+		const className = node.declarations[0].id.name
+
+		const exportDefaultStatement = _.last(findNodes(tree, node => _.isMatch(node, {
+			type: 'ExportDefaultDeclaration',
+			declaration: {
+				type: 'Identifier',
+				name: className
+			}
+		})))
+
+		if (exportDefaultStatement) {
+			code = code.substring(0, exportDefaultStatement.start) + (' '.repeat(exportDefaultStatement.end - exportDefaultStatement.start)) + code.substring(exportDefaultStatement.end)
+		}
+
 		return [
 			code.substring(rank === 0 ? 0 : list[rank - 1].end, node.start).trim(),
 			'',
-			`class ${node.declarations[0].id.name} extends React.PureComponent {`,
-			_.chain(body).compact().flattenDeep().value().join('\n\n'),
+			(exportDefaultStatement ? 'export default ' : '') + `class ${className} extends React.PureComponent {`,
+			_.chain(classBody).compact().flattenDeep().value().join('\n\n'),
 			'}',
 			'',
 			rank === list.length - 1 ? code.substring(node.end).trim() : '',
@@ -202,7 +218,7 @@ function migrateReactClass(code) {
 	}).join('')
 }
 
-function findNodesInCodeTree(node, condition, parentNode) {
+function findNodes(node, condition, parentNode) {
 	if (!node) {
 		return []
 	}
@@ -210,7 +226,7 @@ function findNodesInCodeTree(node, condition, parentNode) {
 	node.parent = parentNode
 
 	if (node['type'] === 'File' && node['program']) {
-		return findNodesInCodeTree(node['program'], condition)
+		return findNodes(node['program'], condition)
 
 	} else if (condition(node)) {
 		return [node]
@@ -218,7 +234,7 @@ function findNodesInCodeTree(node, condition, parentNode) {
 	} else if (_.isArrayLike(node['body'])) {
 		let output = []
 		for (let index = 0; index < node['body'].length; index++) {
-			const result = findNodesInCodeTree(node['body'][index], condition, node)
+			const result = findNodes(node['body'][index], condition, node)
 			if (result.length > 0) {
 				output.push(...result)
 			}
@@ -226,12 +242,9 @@ function findNodesInCodeTree(node, condition, parentNode) {
 		return output
 
 	} else if (_.isObject(node['body'])) {
-		return findNodesInCodeTree(node['body'], condition, node)
+		return findNodes(node['body'], condition, node)
 
 	} else {
-
-
-
 		return []
 	}
 }
