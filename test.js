@@ -1,10 +1,25 @@
+import React from 'react'
 
-export const x = React.createClass({
-	onSomething (e = 1) {
-		return e + 2
+const myComponent = React.createClass({
+	getInitialState() {
+		return {
+			counter: 0
+		}
 	},
 
-	render () {
-		return <Something>{this.onSomething()}</Something>
+	onClick(e) {
+		this.setState({
+			counter: this.state.counter + 1
+		})
+	},
+
+	render() {
+		return (
+			<div onClick={this.props.onClick}>
+				{this.state.counter}
+			</div>
+		)
 	}
 })
+
+export default myComponent

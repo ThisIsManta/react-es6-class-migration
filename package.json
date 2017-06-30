@@ -11,7 +11,7 @@
 		"react",
 		"class"
 	],
-	"icon": "logo.png",
+	"icon": "docs/logo.png",
 	"galleryBanner": {
 		"color": "#61dafb"
 	},
@@ -22,7 +22,8 @@
 		"vscode": "^1.11.0"
 	},
 	"activationEvents": [
-		"onLanguage:javascript"
+		"onLanguage:javascript",
+		"onLanguage:javascriptreact"
 	],
 	"main": "./vscode.js",
 	"contributes": {
