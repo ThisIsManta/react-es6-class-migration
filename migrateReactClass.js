@@ -285,7 +285,13 @@ function serialize(node, code) {
 		return '{ ' + node.properties.map(stub => serialize(stub, code)).join(', ') + ' }'
 
 	} else if (node.type === 'ObjectProperty') {
-		return serialize(node.value)
+		return serialize(node.value, code)
+
+	} else if (node.type === 'AssignmentPattern') {
+		return node.left.name + ' = ' + code.substring(node.right.start, node.right.end)
+
+	} else {
+		return code.substring(node.start, node.end)
 	}
 }
 
