@@ -20,7 +20,7 @@
 			"request": "launch",
 			"program": "${workspaceRoot}/command.js",
 			"args": [
-				"ButtonWithOption.react.js"
+				"test.js"
 			],
 			"cwd": "${workspaceRoot}"
 		}

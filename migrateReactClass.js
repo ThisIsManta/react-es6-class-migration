@@ -65,6 +65,37 @@ const reactPropTypes = {
 	}
 }
 
+const matchExportDefault = (className) => (node) =>
+	_.isMatch(node, {
+		type: 'ExportDefaultDeclaration',
+		declaration: {
+			type: 'Identifier',
+			name: className
+		}
+	}) ||
+	_.isMatch(node, {
+		type: 'ExpressionStatement',
+		expression: {
+			type: 'AssignmentExpression',
+			operator: '=',
+			left: {
+				type: 'MemberExpression',
+				object: {
+					type: 'Identifier',
+					name: 'module'
+				},
+				property: {
+					type: 'Identifier',
+					name: 'exports'
+				}
+			},
+			right: {
+				type: 'Identifier',
+				name: className
+			}
+		}
+	})
+
 const checkIfFunctionReturnsReactOnly = node => node.declarations[0].init.body.type === 'JSXElement'
 
 const checkIfFunctionReturnsReactLast = node => node.declarations[0].init.body.type === 'BlockStatement' && _.isMatch(_.last(node.declarations[0].init.body.body), { type: 'ReturnStatement', argument: { type: 'JSXElement' } })
@@ -195,13 +226,7 @@ function migrateReactClass(code) {
 
 		const className = node.declarations[0].id.name
 
-		const exportDefaultStatement = _.last(findNodes(tree, node => _.isMatch(node, {
-			type: 'ExportDefaultDeclaration',
-			declaration: {
-				type: 'Identifier',
-				name: className
-			}
-		})))
+		const exportDefaultStatement = _.last(findNodes(tree, matchExportDefault(className)))
 
 		if (exportDefaultStatement) {
 			code = code.substring(0, exportDefaultStatement.start) + (' '.repeat(exportDefaultStatement.end - exportDefaultStatement.start)) + code.substring(exportDefaultStatement.end)
