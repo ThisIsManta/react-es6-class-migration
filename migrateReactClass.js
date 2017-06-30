@@ -170,18 +170,18 @@ function migrateReactClass(code) {
 
 					let initialization = ''
 					if (statements.length > 1) {
-						initialization = code.substring(statements[0].start, statements[statements.length - 2].end)
+						initialization = code.substring(statements[0].start, statements[statements.length - 2].end).trim()
 					}
 					const state = code.substring(_.last(statements).argument.start, _.last(statements).argument.end)
 
 					return [
-						'constructor (props) {',
-						'super(props)',
-						'',
-						initialization,
+						'constructor (props) {\n',
+						'super(props)\n',
+						'\n',
+						initialization ? (initialization + '\n') : '',
 						'this.state = ' + state,
 						'}',
-					].join('\n').trim()
+					].join('').trim()
 
 				} else if (_.isMatch(item, { type: 'ObjectMethod', body: { type: 'BlockStatement' } })) {
 					const methodName = item.key.name
@@ -234,12 +234,15 @@ function migrateReactClass(code) {
 		const exportNamedStatement = !exportDefaultStatement && node.parent.type === 'ExportNamedDeclaration'
 
 		return [
-			code.substring(rank === 0 ? 0 : list[rank - 1].end, node.start).trim() + (exportNamedStatement ? ' ' : '\n\n') + (exportDefaultStatement ? 'export default ' : '') + `class ${className} extends React.PureComponent {`,
+			code.substring(rank === 0 ? 0 : list[rank - 1].end, node.start).trim(),
+			exportNamedStatement ? ' ' : '\n\n',
+			exportDefaultStatement ? 'export default ' : '',
+			`class ${className} extends React.PureComponent {\n`,
 			_.chain(classBody).compact().flattenDeep().value().join('\n\n'),
-			'}',
-			'',
+			'}\n',
+			'\n',
 			rank === list.length - 1 ? code.substring(node.end).trim() : '',
-		].join('\n')
+		].join('')
 	}).join('')
 }
 
