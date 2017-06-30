@@ -1,5 +1,5 @@
 
-const x = React.createClass({
+export const x = React.createClass({
 	onSomething (e = 1) {
 		return e + 2
 	},
@@ -8,5 +8,3 @@ const x = React.createClass({
 		return <Something>{this.onSomething()}</Something>
 	}
 })
-
-module.exports = x

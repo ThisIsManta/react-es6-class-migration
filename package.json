@@ -1,7 +1,7 @@
 {
 	"name": "react-es6-class-migration",
 	"displayName": "Manta's React ES6 Class Migration",
-	"version": "0.0.4",
+	"version": "0.0.5",
 	"publisher": "thisismanta",
 	"repository": {
 		"url": "https://github.com/ThisIsManta/react-es6-class-migration"
