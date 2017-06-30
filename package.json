@@ -34,6 +34,10 @@
 			}
 		]
 	},
+	"scripts": {
+		"version": "vsce publish",
+		"postversion": "git push --tags --quiet origin master:master"
+	},
 	"devDependencies": {
 		"vscode": "^1.1.0"
 	},
