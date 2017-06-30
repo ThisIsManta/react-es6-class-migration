@@ -2,7 +2,7 @@ const vscode = require('vscode')
 const migrateReactClass = require('./migrateReactClass')
 
 function activate(context) {
-	context.subscriptions.push(vscode.commands.registerCommand('migrate-to-react-es6-class', () => {
+	context.subscriptions.push(vscode.commands.registerCommand('migrateToReactClass', () => {
 		const editor = vscode.window.activeTextEditor
 		const document = editor.document
 
