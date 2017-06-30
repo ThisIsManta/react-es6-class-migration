@@ -185,7 +185,7 @@ function migrateReactClass(code) {
 
 				} else if (_.isMatch(item, { type: 'ObjectMethod', body: { type: 'BlockStatement' } })) {
 					const methodName = item.key.name
-					const methodPara = item.params.map(serialize).join(', ')
+					const methodPara = item.params.map(node => serialize(node, code)).join(', ')
 					const methodBody = code.substring(item.body.start, item.body.end)
 					const methodMods = item.async ? 'async' : ''
 
@@ -227,15 +227,14 @@ function migrateReactClass(code) {
 		const className = node.declarations[0].id.name
 
 		const exportDefaultStatement = _.last(findNodes(tree, matchExportDefault(className)))
-
 		if (exportDefaultStatement) {
 			code = code.substring(0, exportDefaultStatement.start) + (' '.repeat(exportDefaultStatement.end - exportDefaultStatement.start)) + code.substring(exportDefaultStatement.end)
 		}
 
+		const exportNamedStatement = !exportDefaultStatement && node.parent.type === 'ExportNamedDeclaration'
+
 		return [
-			code.substring(rank === 0 ? 0 : list[rank - 1].end, node.start).trim(),
-			'',
-			(exportDefaultStatement ? 'export default ' : '') + `class ${className} extends React.PureComponent {`,
+			code.substring(rank === 0 ? 0 : list[rank - 1].end, node.start).trim() + (exportNamedStatement ? ' ' : '\n\n') + (exportDefaultStatement ? 'export default ' : '') + `class ${className} extends React.PureComponent {`,
 			_.chain(classBody).compact().flattenDeep().value().join('\n\n'),
 			'}',
 			'',
@@ -270,17 +269,20 @@ function findNodes(node, condition, parentNode) {
 	} else if (_.isObject(node['body'])) {
 		return findNodes(node['body'], condition, node)
 
+	} else if (parentNode !== undefined && parentNode.type === 'Program' && node.type === 'ExportNamedDeclaration') {
+		return findNodes(node.declaration, condition, node)
+
 	} else {
 		return []
 	}
 }
 
-function serialize(node) {
+function serialize(node, code) {
 	if (node.type === 'Identifier') {
 		return node.name
 
 	} else if (node.type === 'ObjectPattern') {
-		return '{ ' + node.properties.map(serialize).join(', ') + ' }'
+		return '{ ' + node.properties.map(stub => serialize(stub, code)).join(', ') + ' }'
 
 	} else if (node.type === 'ObjectProperty') {
 		return serialize(node.value)
