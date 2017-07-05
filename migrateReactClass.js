@@ -231,12 +231,12 @@ function migrateReactClass(code) {
 			code = code.substring(0, exportDefaultStatement.start) + (' '.repeat(exportDefaultStatement.end - exportDefaultStatement.start)) + code.substring(exportDefaultStatement.end)
 		}
 
-		const exportNamedStatement = !exportDefaultStatement && node.parent.type === 'ExportNamedDeclaration'
+		const exportNamedStatement = node.parent.type === 'ExportNamedDeclaration'
 
 		return [
 			code.substring(rank === 0 ? 0 : list[rank - 1].end, node.start).trim(),
 			exportNamedStatement ? ' ' : '\n\n',
-			exportDefaultStatement ? 'export default ' : '',
+			exportDefaultStatement ? (exportNamedStatement ? '' : 'export ') + 'default ' : '',
 			`class ${className} extends React.PureComponent {\n`,
 			_.chain(classBody).compact().flattenDeep().value().join('\n\n'),
 			'}\n',
