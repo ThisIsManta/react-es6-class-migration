@@ -291,7 +291,7 @@ function serialize(node, code) {
 		return serialize(node.value, code)
 
 	} else if (node.type === 'AssignmentPattern') {
-		return node.left.name + ' = ' + code.substring(node.right.start, node.right.end)
+		return serialize(node.left) + ' = ' + code.substring(node.right.start, node.right.end)
 
 	} else {
 		return code.substring(node.start, node.end)
