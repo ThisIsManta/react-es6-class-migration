@@ -2,7 +2,7 @@
 	"name": "react-es6-class-migration",
 	"displayName": "Manta's React ES6 Class Migration",
 	"description": "Migrate React.createClass() to ES6 class syntax",
-	"version": "1.0.1",
+	"version": "1.0.2",
 	"publisher": "thisismanta",
 	"categories": [
 		"Other"
