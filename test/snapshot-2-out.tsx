@@ -33,7 +33,7 @@ optionalUnion?: string | number | Message
 optionalArrayOf?: Array<number>
 
 // An object with property values of a certain type
-optionalObjectOf?: Number
+optionalObjectOf?: { [string]: number }
 
 // An object taking on a particular shape
 optionalObjectWithShape?: { color: string, fontSize: number }

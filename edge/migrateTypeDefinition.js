@@ -10,11 +10,8 @@ function migrateTypeDefinition(code) {
 		node.importClause &&
 		ts.isIdentifier(node.importClause.name)
 	))
-	if (!propTypeModuleNode) {
-		return code
-	}
 
-	const propTypeModuleName = propTypeModuleNode.importClause.name.text
+	const propTypeModuleName = _.get(propTypeModuleNode, 'importClause.name.text', 'PropTypes')
 
 	const classListWithoutPropDefinitions = findNodes(tree, node =>
 		ts.isClassDeclaration(node) &&
@@ -105,7 +102,7 @@ function migrateTypeDefinition(code) {
 		} else if (corrType === 'instanceOf') {
 			corrType = propNode.parent.arguments[0].text
 		} else if (corrType === 'objectOf') {
-			corrType = _.capitalize(getCorrespondingTypeDefinition(propNode.parent.arguments[0]).type)
+			corrType = '{ [string]: ' + getCorrespondingTypeDefinition(propNode.parent.arguments[0]).type + ' }'
 		} else if (propNode.name.text === 'oneOf') {
 			corrType = _.chain(propNode.parent.arguments[0].elements)
 				.map(node => {
