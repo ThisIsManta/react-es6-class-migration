@@ -132,10 +132,15 @@ function migrateReactClass(code) {
 		tree = parseTree(code)
 	}
 
-	return findNodes(tree, node =>
+	const nodeList = findNodes(tree, node =>
 		_.isMatch(node, reactCreateClass) ||
 		_.isMatch(node, reactStatelessFunction) && (checkIfFunctionReturnsReactOnly(node) || checkIfFunctionReturnsReactLast(node))
-	).map((node, rank, list) => {
+	)
+	if (nodeList.length === 0) {
+		return code
+	}
+
+	return nodeList.map((node, rank, list) => {
 		let classBody
 		if (_.isMatch(node, reactCreateClass)) {
 			classBody = node.declarations[0].init.arguments[0].properties.map(item => {
