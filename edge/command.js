@@ -4,6 +4,7 @@ const fs = require('fs')
 const glob = require('glob')
 const _ = require('lodash')
 const migrateReactClass = require('./migrateReactClass')
+const migrateTypeDefinition = require('./migrateTypeDefinition')
 
 const replaceOriginal = process.argv.find(argx => argx === '-r' || argx === '--replace')
 
@@ -14,7 +15,11 @@ _.chain(process.argv)
 	.flatten()
 	.forEach(path => {
 		const originalCode = fs.readFileSync(path, { encoding: 'utf-8' })
-		const modifiedCode = migrateReactClass(originalCode)
+		let modifiedCode = migrateReactClass(originalCode)
+
+		if (/\.tsx$/.test(path)) {
+			modifiedCode = migrateTypeDefinition(modifiedCode)
+		}
 
 		if (replaceOriginal) {
 			fs.writeFileSync(path, modifiedCode)

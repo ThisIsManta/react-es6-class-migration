@@ -36,7 +36,9 @@
 	},
 	"scripts": {
 		"version": "vsce publish",
-		"postversion": "git push --tags --quiet origin master:master"
+		"postversion": "git push --tags --quiet origin master:master",
+		"vscode:prepublish": "npm test",
+		"test": "node ./test/runner.js"
 	},
 	"devDependencies": {
 		"vscode": "1.1.18"
