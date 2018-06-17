@@ -1,5 +1,5 @@
 # Usage guide
-Simply run **Migrate to React class** command, then re-format the indentation by **Format Document** command.
+Simply run **Migrate to React class** command. Additionally, if the file is _TypeScript React_ (`*.tsx`), this also converts `PropTypes` to _TypeScript_ type definitions.
 
 Note that this command may not work if `React.createClass` is nested in another function.
 
