@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 
 const fs = require('fs')
-const babylon = require('babylon')
 const glob = require('glob')
 const _ = require('lodash')
 const migrateReactClass = require('./migrateReactClass')

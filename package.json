@@ -25,7 +25,7 @@
 		"onLanguage:javascript",
 		"onLanguage:javascriptreact"
 	],
-	"main": "./vscode.js",
+	"main": "./edge/extension.js",
 	"contributes": {
 		"commands": [
 			{
@@ -39,11 +39,11 @@
 		"postversion": "git push --tags --quiet origin master:master"
 	},
 	"devDependencies": {
-		"vscode": "^1.1.0"
+		"vscode": "1.1.18"
 	},
 	"dependencies": {
-		"babylon": "6.16.1",
-		"glob": "7.1.1",
-		"lodash": "4.17.4"
+		"babylon": "6.18.0",
+		"glob": "7.1.2",
+		"lodash": "4.17.10"
 	}
 }
