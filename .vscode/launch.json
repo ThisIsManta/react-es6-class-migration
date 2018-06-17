@@ -18,9 +18,9 @@
 			"name": "Debug",
 			"type": "node",
 			"request": "launch",
-			"program": "${workspaceRoot}/command.js",
+			"program": "${workspaceRoot}/edge/command.js",
 			"args": [
-				"test.js"
+				"edge/test.js"
 			],
 			"cwd": "${workspaceRoot}"
 		}
