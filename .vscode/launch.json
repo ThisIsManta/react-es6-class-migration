@@ -13,16 +13,6 @@
 				"--extensionDevelopmentPath=${workspaceRoot}"
 			],
 			"stopOnEntry": false
-		},
-		{
-			"name": "Debug",
-			"type": "node",
-			"request": "launch",
-			"program": "${workspaceRoot}/edge/command.js",
-			"args": [
-				"edge/test.js"
-			],
-			"cwd": "${workspaceRoot}"
 		}
 	]
 }
