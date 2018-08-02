@@ -19,13 +19,13 @@
 		"url": "https://github.com/ThisIsManta/vscode-react-es6-class-migration"
 	},
 	"engines": {
-		"vscode": "^1.22.0"
+		"vscode": "^1.25.0"
 	},
 	"activationEvents": [
 		"onLanguage:javascript",
 		"onLanguage:javascriptreact"
 	],
-	"main": "./edge/extension.js",
+	"main": "./dist/extension",
 	"contributes": {
 		"commands": [
 			{
@@ -35,16 +35,21 @@
 		]
 	},
 	"scripts": {
+		"postinstall": "node ./node_modules/vscode/bin/install",
+		"compile": "tsc --watch --project ./",
+		"test": "node ./test/runner.js",
+		"vscode:prepublish": "tsc --skipLibCheck --project ./ & npm test",
+		"preversion": "git push --dry-run origin master:master",
 		"version": "vsce publish",
-		"postversion": "git push --tags --quiet origin master:master",
-		"vscode:prepublish": "npm test",
-		"test": "node ./test/runner.js"
+		"postversion": "git push --tags --quiet origin master:master"
 	},
 	"devDependencies": {
+		"@types/lodash": "^4.14.115",
+		"@types/node": "^8.0.0",
+		"@types/typescript": "^2.0.0",
 		"vscode": "1.1.18"
 	},
 	"dependencies": {
-		"babylon": "6.18.0",
 		"glob": "7.1.2",
 		"lodash": "4.17.10",
 		"typescript": "^2.9.2"
