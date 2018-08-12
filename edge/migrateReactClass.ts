@@ -2,6 +2,8 @@ import * as _ from 'lodash'
 import * as fp from 'path'
 import * as ts from 'typescript'
 
+const mutablePropType = /^(?:array|object|shape|exact|node|element|instance|any)(?:Of)?$/
+
 export default function (originalCode: string, fileType: 'jsx' | 'tsx') {
 	const codeTree = ts.createSourceFile('file.' + fileType, originalCode, ts.ScriptTarget.ESNext, true)
 	const components = findStatelessComponents(codeTree)
@@ -10,8 +12,10 @@ export default function (originalCode: string, fileType: 'jsx' | 'tsx') {
 
 	for (const component of components) {
 		const propTypes = attachments.find(item => item.componentName === component.componentName && item.fieldName === 'propTypes')
+		let propsContainMutableTypes = false
 		if (propTypes) {
 			processingNodes.push({ start: propTypes.rootNode.getStart(), end: propTypes.rootNode.getEnd() })
+			propsContainMutableTypes = findPropTypes(propTypes.rootNode).some(type => mutablePropType.test(type))
 		}
 
 		const defaultProps = attachments.find(item => item.componentName === component.componentName && item.fieldName === 'defaultProps')
@@ -31,7 +35,7 @@ export default function (originalCode: string, fileType: 'jsx' | 'tsx') {
 		const newText = [
 			// TODO: export
 			// TODO: export default
-			`class ${component.componentName} extends React.Component {`,
+			`class ${component.componentName} extends React.${propsContainMutableTypes ? '' : 'Pure'}Component {`,
 			propTypes ? `static propTypes = ${propTypes.text}\n` : null,
 			defaultProps ? `static defaultProps = ${defaultProps.text}\n` : null,
 			`render() {`,
@@ -180,6 +184,22 @@ const findAttachments = (node: ts.SourceFile) => createNodeMatcher<Array<Attachm
 		}
 	}
 )(node)
+
+const findPropTypes = createNodeMatcher<Array<string>>(
+	() => [],
+	(node, results) => {
+		if (ts.isIdentifier(node) && node.text === 'PropTypes' && node.parent) {
+			if (ts.isPropertyAccessExpression(node.parent) && node.parent.expression === node) {
+				results.push(node.parent.name.text)
+				return results
+
+			} else if (ts.isPropertyAccessExpression(node.parent) && node.parent.name === node && ts.isPropertyAccessExpression(node.parent.parent)) {
+				results.push(node.parent.parent.name.text)
+				return results
+			}
+		}
+	}
+)
 
 const findPropIdentifiers = (node: ts.Node, name: string) => createNodeMatcher<Array<ts.Identifier>>(
 	() => [],
