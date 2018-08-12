@@ -18,19 +18,19 @@ export default function (originalCode: string, fileType: 'jsx' | 'tsx') {
 			propsContainMutableTypes = findPropTypes(propTypes.rootNode).some(type => mutablePropType.test(type))
 		}
 
+		component.bodyText = addThisReference(component.bodyText, component.propNode, fileType)
+
 		const defaultProps = attachments.find(item => item.componentName === component.componentName && item.fieldName === 'defaultProps')
 		if (defaultProps) {
 			processingNodes.push({ start: defaultProps.rootNode.getStart(), end: defaultProps.rootNode.getEnd() })
 		}
 
-		// Replace "props" with "this.props"
-		if (ts.isIdentifier(component.propNode.name)) {
-			const bodyTree = ts.createSourceFile('file.' + fileType, component.bodyText, ts.ScriptTarget.ESNext, true)
-			const propList = _.sortBy(findPropIdentifiers(bodyTree, component.propNode.name.text), node => -node.getStart())
-			for (const propNode of propList) {
-				component.bodyText = component.bodyText.substring(0, propNode.getStart()) + 'this.props' + component.bodyText.substring(propNode.getEnd())
-			}
+		const contextTypes = attachments.find(item => item.componentName === component.componentName && item.fieldName === 'contextTypes')
+		if (contextTypes) {
+			processingNodes.push({ start: contextTypes.rootNode.getStart(), end: contextTypes.rootNode.getEnd() })
 		}
+
+		component.bodyText = addThisReference(component.bodyText, component.contextNode, fileType)
 
 		const newText = [
 			// TODO: export
@@ -38,6 +38,7 @@ export default function (originalCode: string, fileType: 'jsx' | 'tsx') {
 			`class ${component.componentName} extends React.${propsContainMutableTypes ? '' : 'Pure'}Component {`,
 			propTypes ? `static propTypes = ${propTypes.text}\n` : null,
 			defaultProps ? `static defaultProps = ${defaultProps.text}\n` : null,
+			contextTypes ? `static contextTypes = ${contextTypes.text}\n` : null,
 			`render() {`,
 			component.bodyText,
 			`}`,
@@ -51,6 +52,34 @@ export default function (originalCode: string, fileType: 'jsx' | 'tsx') {
 		codeText = codeText.substring(0, item.start) + (item.replacement || '') + codeText.substring(item.end)
 	}
 	return codeText
+}
+
+function addThisReference(bodyText: string, workNode: ts.ParameterDeclaration, fileType: string) {
+	if (!workNode) {
+		return bodyText
+	}
+
+	if (ts.isIdentifier(workNode.name)) {
+		const bodyTree = ts.createSourceFile('file.' + fileType, bodyText, ts.ScriptTarget.ESNext, true)
+		const nodeList = _.sortBy(findIdentifiers(bodyTree, workNode.name.text), node => -node.getStart())
+		for (const node of nodeList) {
+			bodyText = bodyText.substring(0, node.getStart()) + 'this.props' + bodyText.substring(node.getEnd())
+		}
+
+	} else if (ts.isObjectBindingPattern(workNode.name)) {
+		const bodyTree = ts.createSourceFile('file.' + fileType, bodyText, ts.ScriptTarget.ESNext, true)
+		const nodeList = _.chain(workNode.name.elements)
+			.map(node => node.dotDotDotToken === undefined && ts.isIdentifier(node.name) ? node.name.text : null)
+			.compact()
+			.map(name => findIdentifiers(bodyTree, name))
+			.flatten()
+			.sortBy(node => -node.getStart())
+			.value()
+		for (const node of nodeList) {
+			bodyText = bodyText.substring(0, node.getStart()) + 'this.context.' + node.text + bodyText.substring(node.getEnd())
+		}
+	}
+	return bodyText
 }
 
 const createNodeMatcher = <T>(getInitialResult: () => T, reducer: (node: ts.Node, results: T) => T | undefined) => (node: ts.Node) => {
@@ -201,10 +230,14 @@ const findPropTypes = createNodeMatcher<Array<string>>(
 	}
 )
 
-const findPropIdentifiers = (node: ts.Node, name: string) => createNodeMatcher<Array<ts.Identifier>>(
+const findIdentifiers = (node: ts.Node, name: string) => createNodeMatcher<Array<ts.Identifier>>(
 	() => [],
 	(node, results) => {
 		if (ts.isIdentifier(node) && node.text === name) {
+			if (node.parent && ts.isJsxAttribute(node.parent) && node.parent.name === node) {
+				return
+			}
+
 			results.push(node)
 			return results
 		}
