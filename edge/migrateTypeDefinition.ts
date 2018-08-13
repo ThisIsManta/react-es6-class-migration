@@ -10,7 +10,7 @@ export default function (originalCode: string) {
 	const classListWithoutPropDefinitions = findClassListWithoutPropDefinitions(codeTree)
 
 	_.forEachRight(classListWithoutPropDefinitions, classNode => {
-		const staticPropType = findStaticPropType(classNode.members, propTypeModule.name)
+		const staticPropType = findStaticPropType(classNode.members)
 		if (!staticPropType) {
 			return null
 		}
@@ -153,7 +153,7 @@ const findClassListWithoutPropDefinitions = createNodeMatcher<Array<ts.ClassDecl
 	}
 )
 
-const findStaticPropType = (nodeList: ts.NodeArray<ts.ClassElement>, moduleName: string) => {
+const findStaticPropType = (nodeList: ts.NodeArray<ts.ClassElement>) => {
 	const matcher = createNodeMatcher<{ node: ts.PropertyDeclaration, members: ts.NodeArray<ts.ObjectLiteralElementLike> }>(
 		() => undefined,
 		(node) => {
@@ -162,7 +162,7 @@ const findStaticPropType = (nodeList: ts.NodeArray<ts.ClassElement>, moduleName:
 				node.modifiers &&
 				node.modifiers[0].kind === ts.SyntaxKind.StaticKeyword &&
 				ts.isIdentifier(node.name) &&
-				node.name.text === moduleName &&
+				node.name.text === 'propTypes' &&
 				node.initializer &&
 				ts.isObjectLiteralExpression(node.initializer)
 			) {

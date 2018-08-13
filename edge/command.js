@@ -16,7 +16,7 @@ _.chain(process.argv)
 	.flatten()
 	.forEach(path => {
 		// Note that "_" in "._tsx" is to prevent TypeScript compilation error due to invalid TSX file content
-		const fileType = /\._?tsx$/.test(fp.extname(path)) ? 'tsx' : 'jsx'
+		const fileType = /\.(?:test-)?tsx$/.test(fp.extname(path)) ? 'tsx' : 'jsx'
 
 		const originalCode = fs.readFileSync(path, { encoding: 'utf-8' })
 		let modifiedCode = migrateReactClass(originalCode, fileType)

@@ -23,7 +23,8 @@
 	},
 	"activationEvents": [
 		"onLanguage:javascript",
-		"onLanguage:javascriptreact"
+		"onLanguage:javascriptreact",
+		"onLanguage:typescriptreact"
 	],
 	"main": "./dist/extension",
 	"contributes": {
