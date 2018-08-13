@@ -1,5 +1,4 @@
 import * as _ from 'lodash'
-import * as fp from 'path'
 import * as ts from 'typescript'
 
 const mutablePropType = /^(?:array|object|shape|exact|node|element|instance|any)(?:Of)?$/
@@ -10,12 +9,14 @@ export default function (originalCode: string, fileType: 'jsx' | 'tsx') {
 	const attachments = findAttachments(codeTree)
 	const processingNodes: Array<{ start: number, end: number, replacement?: string }> = []
 
+	const propTypeModule = findPropTypeModuleName(codeTree)
+
 	for (const component of components) {
 		const propTypes = attachments.find(item => item.componentName === component.componentName && item.fieldName === 'propTypes')
 		let propsContainMutableTypes = false
 		if (propTypes) {
 			processingNodes.push({ start: propTypes.rootNode.getStart(), end: propTypes.rootNode.getEnd() })
-			propsContainMutableTypes = findPropTypes(propTypes.rootNode).some(type => mutablePropType.test(type))
+			propsContainMutableTypes = findPropTypes(propTypes.rootNode, propTypeModule.name).some(type => mutablePropType.test(type))
 		}
 
 		component.bodyText = addThisReference(component.bodyText, component.propNode, fileType)
@@ -82,7 +83,7 @@ function addThisReference(bodyText: string, workNode: ts.ParameterDeclaration, f
 	return bodyText
 }
 
-const createNodeMatcher = <T>(getInitialResult: () => T, reducer: (node: ts.Node, results: T) => T | undefined) => (node: ts.Node) => {
+export const createNodeMatcher = <T>(getInitialResult: () => T, reducer: (node: ts.Node, results: T) => T | undefined) => (node: ts.Node) => {
 	const visitedNodes = new Set<ts.Node>()
 	let matchingNodes = getInitialResult()
 	const matcher = (node: ts.Node) => {
@@ -214,10 +215,25 @@ const findAttachments = (node: ts.SourceFile) => createNodeMatcher<Array<Attachm
 	}
 )(node)
 
-const findPropTypes = createNodeMatcher<Array<string>>(
+export const findPropTypeModuleName = createNodeMatcher<{ node?: ts.ImportDeclaration, name: string }>(
+	() => ({ name: 'PropTypes' }),
+	(node) => {
+		if (
+			ts.isImportDeclaration(node) &&
+			ts.isStringLiteral(node.moduleSpecifier) &&
+			node.moduleSpecifier.text === 'prop-types' &&
+			node.importClause &&
+			ts.isIdentifier(node.importClause.name)
+		) {
+			return { node, name: node.importClause.name.text }
+		}
+	}
+)
+
+const findPropTypes = (node: ts.Node, moduleName: string) => createNodeMatcher<Array<string>>(
 	() => [],
 	(node, results) => {
-		if (ts.isIdentifier(node) && node.text === 'PropTypes' && node.parent) {
+		if (ts.isIdentifier(node) && node.text === moduleName && node.parent) {
 			if (ts.isPropertyAccessExpression(node.parent) && node.parent.expression === node) {
 				results.push(node.parent.name.text)
 				return results
@@ -228,7 +244,7 @@ const findPropTypes = createNodeMatcher<Array<string>>(
 			}
 		}
 	}
-)
+)(node)
 
 const findIdentifiers = (node: ts.Node, name: string) => createNodeMatcher<Array<ts.Identifier>>(
 	() => [],
