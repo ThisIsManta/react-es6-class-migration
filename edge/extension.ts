@@ -1,6 +1,6 @@
 import * as vscode from 'vscode'
 import migrateReactClass from './migrateReactClass'
-const migrateTypeDefinition = require('./migrateTypeDefinition')
+import migrateTypeDefinition from './migrateTypeDefinition'
 
 export function activate(context) {
 	context.subscriptions.push(vscode.commands.registerCommand('migrateToReactClass', async () => {

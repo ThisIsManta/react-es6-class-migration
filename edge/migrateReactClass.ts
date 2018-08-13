@@ -178,8 +178,10 @@ const hasReturnJSX = createNodeMatcher(
 		}
 
 		if (
-			ts.isJsxElement(node) ||
-			ts.isParenthesizedExpression(node) && ts.isJsxElement(node.expression) ||
+			ts.isJsxElement(node) || ts.isJsxSelfClosingElement(node) ||
+			ts.isParenthesizedExpression(node) && (
+				ts.isJsxElement(node.expression) || ts.isJsxSelfClosingElement(node.expression)
+			) ||
 			ts.isReturnStatement(node) && hasReturnJSX(node.expression)
 		) {
 			return true
