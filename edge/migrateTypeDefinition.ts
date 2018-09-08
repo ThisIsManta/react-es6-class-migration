@@ -1,14 +1,15 @@
 import * as _ from 'lodash'
 import * as ts from 'typescript'
-import { findPropTypeModuleName } from './migrateReactClass'
+import { findReactModule, findPropTypeModule } from './migrateReactClass'
 import { createNodeMatcher } from './createNodeMatcher'
 
 export default function (originalCode: string) {
 	const codeTree = ts.createSourceFile('file.tsx', originalCode, ts.ScriptTarget.ESNext, true)
 
-	const propTypeModule = findPropTypeModuleName(codeTree)
+	const reactModule = findReactModule(codeTree)
+	const propTypeModule = findPropTypeModule(codeTree)
 
-	const classListWithoutPropDefinitions = findClassListWithoutPropDefinitions(codeTree)
+	const classListWithoutPropDefinitions = findClassListWithoutPropDefinitions(codeTree, reactModule)
 
 	_.forEachRight(classListWithoutPropDefinitions, classNode => {
 		const staticPropType = findStaticPropType(classNode.members)
@@ -54,6 +55,7 @@ export default function (originalCode: string) {
 		originalCode = originalCode.substring(0, cursor) + propText + originalCode.substring(cursor)
 	})
 
+	// Delete `import PropTypes from 'prop-types'`
 	if (propTypeModule.node) {
 		originalCode = originalCode.substring(0, propTypeModule.node.pos) + originalCode.substring(propTypeModule.node.end)
 	}
@@ -74,7 +76,8 @@ export default function (originalCode: string) {
 		} else if (corrType === 'array') {
 			corrType = 'Array<any>'
 		} else if (propNode.name.text === 'node') {
-			corrType = 'React.ReactNode'
+			// TODO: add `{ ReactNode }` to the import statement
+			corrType = (reactModule.has('default*') ? reactModule.get('default*') + '.' : '') + 'ReactNode'
 		} else if (propNode.name.text === 'element') {
 			corrType = 'JSX.Element'
 		}
@@ -130,7 +133,7 @@ export default function (originalCode: string) {
 	}
 }
 
-const findClassListWithoutPropDefinitions = createNodeMatcher<Array<ts.ClassDeclaration>>(
+const findClassListWithoutPropDefinitions = (node: ts.Node, reactModule: Map<string, string>) => createNodeMatcher<Array<ts.ClassDeclaration>>(
 	() => [],
 	(node, results) => {
 		if (
@@ -141,18 +144,29 @@ const findClassListWithoutPropDefinitions = createNodeMatcher<Array<ts.ClassDecl
 			ts.isExpressionWithTypeArguments(node.heritageClauses[0].types[0]) &&
 			node.heritageClauses[0].types[0].typeArguments === undefined
 		) {
-			const stub = node.heritageClauses[0].types[0].expression as ts.PropertyAccessExpression
+			const stub = node.heritageClauses[0].types[0]
 			if (
-				ts.isIdentifier(stub.expression) &&
-				stub.expression.text === 'React' &&
-				(stub.name.text === 'Component' || stub.name.text === 'PureComponent')
+				(
+					ts.isPropertyAccessExpression(stub.expression) &&
+					ts.isIdentifier(stub.expression.expression) &&
+					reactModule.has('default*') &&
+					stub.expression.expression.text === reactModule.get('default*') &&
+					(stub.expression.name.text === 'Component' || stub.expression.name.text === 'PureComponent')
+				) ||
+				(
+					ts.isIdentifier(stub.expression) &&
+					(
+						stub.expression.text === reactModule.get('Component') ||
+						stub.expression.text === reactModule.get('PureComponent')
+					)
+				)
 			) {
 				results.push(node)
 				return results
 			}
 		}
 	}
-)
+)(node)
 
 const findStaticPropType = (nodeList: ts.NodeArray<ts.ClassElement>) => {
 	const matcher = createNodeMatcher<{ node: ts.PropertyDeclaration, members: ts.NodeArray<ts.ObjectLiteralElementLike> }>(

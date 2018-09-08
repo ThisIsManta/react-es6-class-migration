@@ -10,7 +10,8 @@ export default function (originalCode: string, fileType: 'jsx' | 'tsx') {
 	const attachments = findAttachments(codeTree)
 	const processingNodes: Array<{ start: number, end: number, replacement?: string }> = []
 
-	const propTypeModule = findPropTypeModuleName(codeTree)
+	const reactModule = findReactModule(codeTree)
+	const propTypeModule = findPropTypeModule(codeTree)
 
 	for (const component of components) {
 		const propTypes = attachments.find(item => item.componentName === component.componentName && item.fieldName === 'propTypes')
@@ -34,10 +35,19 @@ export default function (originalCode: string, fileType: 'jsx' | 'tsx') {
 
 		component.bodyText = addThisReference(component.bodyText, component.contextNode, fileType)
 
+		let superClass: string
+		if (reactModule.has('PureComponent') && propsContainMutableTypes === false) {
+			superClass = reactModule.get('PureComponent')
+		} else if (reactModule.has('Component')) {
+			superClass = reactModule.get('Component')
+		} else {
+			superClass = reactModule.get('default*') + '.' + (propsContainMutableTypes ? '' : 'Pure') + 'Component'
+		}
+
 		const newText = [
 			// TODO: export
 			// TODO: export default
-			`class ${component.componentName} extends React.${propsContainMutableTypes ? '' : 'Pure'}Component {`,
+			`class ${component.componentName} extends ${superClass} {`,
 			propTypes ? `static propTypes = ${propTypes.text}\n` : null,
 			defaultProps ? `static defaultProps = ${defaultProps.text}\n` : null,
 			contextTypes ? `static contextTypes = ${contextTypes.text}\n` : null,
@@ -189,7 +199,29 @@ const findAttachments = (node: ts.SourceFile) => createNodeMatcher<Array<Attachm
 	}
 )(node)
 
-export const findPropTypeModuleName = createNodeMatcher<{ node?: ts.ImportDeclaration, name: string }>(
+export const findReactModule = createNodeMatcher<Map<string, string>>(
+	() => new Map<string, string>(),
+	(node, importedNameDict) => {
+		if (
+			ts.isImportDeclaration(node) &&
+			ts.isStringLiteral(node.moduleSpecifier) &&
+			node.moduleSpecifier.text === 'react' &&
+			node.importClause
+		) {
+			if (node.importClause.name) {
+				importedNameDict.set('default*', node.importClause.name.text)
+			}
+			if (node.importClause.namedBindings && ts.isNamedImports(node.importClause.namedBindings)) {
+				node.importClause.namedBindings.elements.forEach(node => {
+					importedNameDict.set(node.propertyName ? node.propertyName.text : node.name.text, node.name.text)
+				})
+			}
+			return importedNameDict
+		}
+	}
+)
+
+export const findPropTypeModule = createNodeMatcher<{ node?: ts.ImportDeclaration, name: string }>(
 	() => ({ name: 'PropTypes' }),
 	(node) => {
 		if (
@@ -197,6 +229,7 @@ export const findPropTypeModuleName = createNodeMatcher<{ node?: ts.ImportDeclar
 			ts.isStringLiteral(node.moduleSpecifier) &&
 			node.moduleSpecifier.text === 'prop-types' &&
 			node.importClause &&
+			node.importClause.name &&
 			ts.isIdentifier(node.importClause.name)
 		) {
 			return { node, name: node.importClause.name.text }
