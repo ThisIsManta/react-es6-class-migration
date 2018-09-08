@@ -85,32 +85,36 @@ function addThisReference(bodyText: string, workNode: ts.ParameterDeclaration, f
 
 export const createNodeMatcher = <T>(getInitialResult: () => T, reducer: (node: ts.Node, results: T) => T | undefined) => (node: ts.Node) => {
 	const visitedNodes = new Set<ts.Node>()
-	let matchingNodes = getInitialResult()
+	let oldResult = getInitialResult()
+	const stopWhenDefined = oldResult === undefined
 	const matcher = (node: ts.Node) => {
+		if (stopWhenDefined && oldResult !== undefined) {
+			return
+		}
+
 		if (node === null || node === undefined) {
-			return matchingNodes
+			return
 		}
 
 		if (visitedNodes.has(node)) {
-			return matchingNodes
+			return
 
 		} else {
 			visitedNodes.add(node)
 		}
 
-		let newResult = reducer(node, matchingNodes)
+		let newResult = reducer(node, oldResult)
 		if (newResult === undefined) {
 			node.forEachChild(stub => {
 				matcher(stub)
 			})
 
 		} else {
-			matchingNodes = newResult
+			oldResult = newResult
 		}
-
-		return matchingNodes
 	}
-	return matcher(node)
+	matcher(node)
+	return oldResult
 }
 
 interface Component {
