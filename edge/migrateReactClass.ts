@@ -140,6 +140,7 @@ const findStatelessComponents = createNodeMatcher<Array<Component>>(
 			if (
 				ts.isVariableDeclaration(stub) &&
 				ts.isIdentifier(stub.name) &&
+				stub.initializer &&
 				(ts.isFunctionExpression(stub.initializer) || ts.isArrowFunction(stub.initializer)) &&
 				hasReturnJSX(stub.initializer.body)
 			) {
