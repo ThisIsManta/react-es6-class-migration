@@ -4,8 +4,6 @@ Simply run **Migrate to React class** command to convert _React stateless compon
 ![Usage](docs/usage.gif)
 
 Additionally, if the file is _TypeScript React_ (`*.tsx`), this also converts `PropTypes` to type definitions accordingly.
-
-Given the snippet below, the extension converts to...
 ```tsx
 // Before
 class MyComponent extends React.Component {
@@ -20,12 +18,12 @@ class MyComponent extends React.Component {
 }
 
 // After
-class MyComponent extends React.Component<{ className?: string; children: React.ReactNode }> {
+class MyComponent extends React.Component<{
+	className?: string
+	children: React.ReactNode
+}> {
 	render() {
 		return <div></div>
 	}
 }
 ```
-
-
-Note that version 2.0.0 does not support migrating `React.createClass`.

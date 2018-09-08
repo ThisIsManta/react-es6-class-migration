@@ -6,15 +6,14 @@ const mutablePropType = /^(?:array|object|shape|exact|node|element|instance|any)
 
 export default function (originalCode: string, fileType: 'jsx' | 'tsx') {
 	const codeTree = ts.createSourceFile('file.' + fileType, originalCode, ts.ScriptTarget.ESNext, true)
-	const components = findStatelessComponents(codeTree)
 	const attachments = findAttachments(codeTree)
 	const processingNodes: Array<{ start: number, end: number, replacement: string }> = []
 
 	const reactModule = findReactModule(codeTree)
 	const propTypeModule = findPropTypeModule(codeTree)
 
-	for (const component of components) {
-		const propTypes = attachments.find(item => item.componentName === component.componentName && item.fieldName === 'propTypes')
+	for (const component of findStatelessComponents(codeTree)) {
+		const propTypes = attachments.find(item => item.componentName === component.name && item.fieldName === 'propTypes')
 		let propsContainMutableTypes = false
 		if (propTypes) {
 			processingNodes.push({
@@ -27,7 +26,7 @@ export default function (originalCode: string, fileType: 'jsx' | 'tsx') {
 
 		component.bodyText = addThisReference(component.bodyText, component.propNode, fileType)
 
-		const defaultProps = attachments.find(item => item.componentName === component.componentName && item.fieldName === 'defaultProps')
+		const defaultProps = attachments.find(item => item.componentName === component.name && item.fieldName === 'defaultProps')
 		if (defaultProps) {
 			processingNodes.push({
 				start: defaultProps.rootNode.getStart(),
@@ -36,7 +35,7 @@ export default function (originalCode: string, fileType: 'jsx' | 'tsx') {
 			})
 		}
 
-		const contextTypes = attachments.find(item => item.componentName === component.componentName && item.fieldName === 'contextTypes')
+		const contextTypes = attachments.find(item => item.componentName === component.name && item.fieldName === 'contextTypes')
 		if (contextTypes) {
 			processingNodes.push({
 				start: contextTypes.rootNode.getStart(),
@@ -75,7 +74,7 @@ export default function (originalCode: string, fileType: 'jsx' | 'tsx') {
 		const newText = [
 			// TODO: export
 			// TODO: export default
-			`class ${component.componentName} extends ${superClass} {`,
+			`class ${component.name} extends ${superClass} {`,
 			propTypes ? `static propTypes = ${propTypes.text}\n` : null,
 			defaultProps ? `static defaultProps = ${defaultProps.text}\n` : null,
 			contextTypes ? `static contextTypes = ${contextTypes.text}\n` : null,
@@ -84,6 +83,52 @@ export default function (originalCode: string, fileType: 'jsx' | 'tsx') {
 			`}`,
 			`}`,
 		].filter(line => line !== null).join('\n')
+		processingNodes.push({
+			start: component.rootNode.getStart(),
+			end: component.rootNode.getEnd(),
+			replacement: newText
+		})
+	}
+
+	for (const component of findStatefulComponent(codeTree, reactModule.name)) {
+		let superClass: string
+		if (reactModule.name.has('default*')) {
+			superClass = reactModule.name.get('default*') + '.Component'
+		} else {
+			superClass = 'Component'
+			reactModule.name.set('Component', 'Component')
+			processingNodes.push(createNamedImport(reactModule.node, 'Component'))
+		}
+
+		const newText = _.chain([
+			`class ${component.name} extends ${superClass} {`,
+			component.propTypes ? `static propTypes = ${component.propTypes.getText()}\n` : null,
+			component.getDefaultProps ? `static defaultProps = ${component.getDefaultProps.getText()}\n` : null,
+			component.getInitialState && [
+				`constructor(props) {`,
+				`super(props)`,
+				``,
+				component.getInitialState.statements.map(stub => ts.isReturnStatement(stub) ? `this.state = ` + stub.expression.getText() : stub.getText()),
+				`}\n`,
+			],
+			// TODO: support context
+			component.otherMembers.map(stub => {
+				if (ts.isIdentifier(stub.name) && stub.name.text === 'render') {
+					return stub.getText()
+				}
+
+				if (ts.isMethodDeclaration(stub)) {
+					return stub.name.getText() +
+						' = (' +
+						stub.parameters.map(para => para.getText()).join(', ') +
+						') => ' +
+						(stub.body ? stub.body.getText() : '')
+				}
+
+				return stub.name.getText()
+			}).join('\n\n'),
+			`}`,
+		]).flattenDeep().filter(line => line !== null).value().join('\n')
 		processingNodes.push({
 			start: component.rootNode.getStart(),
 			end: component.rootNode.getEnd(),
@@ -101,21 +146,21 @@ export default function (originalCode: string, fileType: 'jsx' | 'tsx') {
 	return modifiedCode
 }
 
-function addThisReference(bodyText: string, workNode: ts.ParameterDeclaration, fileType: string) {
-	if (!workNode) {
+function addThisReference(bodyText: string, propNode: ts.ParameterDeclaration, fileType: string) {
+	if (!propNode) {
 		return bodyText
 	}
 
-	if (ts.isIdentifier(workNode.name)) {
+	if (ts.isIdentifier(propNode.name)) {
 		const bodyTree = ts.createSourceFile('file.' + fileType, bodyText, ts.ScriptTarget.ESNext, true)
-		const nodeList = _.sortBy(findIdentifiers(bodyTree, workNode.name.text), node => -node.getStart())
+		const nodeList = _.sortBy(findIdentifiers(bodyTree, propNode.name.text), node => -node.getStart())
 		for (const node of nodeList) {
 			bodyText = bodyText.substring(0, node.getStart()) + 'this.props' + bodyText.substring(node.getEnd())
 		}
 
-	} else if (ts.isObjectBindingPattern(workNode.name)) {
+	} else if (ts.isObjectBindingPattern(propNode.name)) {
 		const bodyTree = ts.createSourceFile('file.' + fileType, bodyText, ts.ScriptTarget.ESNext, true)
-		const nodeList = _.chain(workNode.name.elements)
+		const nodeList = _.chain(propNode.name.elements)
 			.map(node => node.dotDotDotToken === undefined && ts.isIdentifier(node.name) ? node.name.text : null)
 			.compact()
 			.map(name => findIdentifiers(bodyTree, name))
@@ -129,24 +174,24 @@ function addThisReference(bodyText: string, workNode: ts.ParameterDeclaration, f
 	return bodyText
 }
 
-interface Component {
+interface StatelessComponent {
+	name: string,
 	rootNode: ts.Node,
-	componentName: string,
-	propNode: ts.ParameterDeclaration,
-	contextNode: ts.ParameterDeclaration,
+	propNode?: ts.ParameterDeclaration,
+	contextNode?: ts.ParameterDeclaration,
 	bodyText: string,
 }
 
-const findStatelessComponents = createNodeMatcher<Array<Component>>(
+const findStatelessComponents = createNodeMatcher<Array<StatelessComponent>>(
 	() => [],
 	(node, results) => {
 		if (ts.isFunctionDeclaration(node) && hasReturnJSX(node.body)) {
 			// function f() { return <div> }
 			results.push({
+				name: node.name.text,
 				rootNode: node,
-				componentName: node.name.text,
-				propNode: node.parameters.length >= 1 ? node.parameters[0] : null,
-				contextNode: node.parameters.length >= 2 ? node.parameters[1] : null,
+				propNode: node.parameters.length >= 1 ? node.parameters[0] : undefined,
+				contextNode: node.parameters.length >= 2 ? node.parameters[1] : undefined,
 				bodyText: node.body.statements.map(stub => stub.getText()).join('\n'),
 			})
 			return results
@@ -165,14 +210,14 @@ const findStatelessComponents = createNodeMatcher<Array<Component>>(
 				// const f = () => (<div/>)
 				// const f = () => { return <div/> }
 				results.push({
+					name: stub.name.text,
 					rootNode: node,
-					componentName: stub.name.text,
 					propNode: stub.initializer.parameters.length >= 1
 						? ts.getMutableClone(stub.initializer.parameters[0])
-						: null,
+						: undefined,
 					contextNode: stub.initializer.parameters.length >= 2
 						? ts.getMutableClone(stub.initializer.parameters[1])
-						: null,
+						: undefined,
 					bodyText: ts.isBlock(stub.initializer.body)
 						? stub.initializer.body.statements.map(stub => stub.getText()).join('\n')
 						: ('return ' + stub.initializer.body.getText()),
@@ -182,6 +227,78 @@ const findStatelessComponents = createNodeMatcher<Array<Component>>(
 		}
 	}
 )
+
+interface StatefulComponent {
+	name: string,
+	rootNode: ts.Node,
+	propTypes?: ts.Node,
+	getDefaultProps?: ts.Expression,
+	getInitialState?: ts.Block,
+	otherMembers: Array<ts.ObjectLiteralElementLike>
+}
+
+const findStatefulComponent = (node: ts.Node, reactModuleNames: Map<string, string>) => createNodeMatcher<Array<StatefulComponent>>(
+	() => [],
+	(node, results) => {
+		if (
+			ts.isVariableDeclarationList(node) &&
+			node.declarations.length === 1 &&
+			node.declarations[0].initializer
+		) {
+			const stub = node.declarations[0]
+			if (
+				!ts.isIdentifier(stub.name) ||
+				!ts.isCallExpression(stub.initializer) ||
+				stub.initializer.arguments.length !== 1
+			) {
+				return
+			}
+
+			const body = stub.initializer.arguments[0]
+			if (!ts.isObjectLiteralExpression(body)) {
+				return
+			}
+
+			if (
+				(
+					reactModuleNames.has('createClass') &&
+					ts.isIdentifier(stub.initializer.expression) &&
+					stub.initializer.expression.text === reactModuleNames.get('createClass')
+				) ||
+				(
+					reactModuleNames.has('default*') &&
+					ts.isPropertyAccessExpression(stub.initializer.expression) &&
+					ts.isIdentifier(stub.initializer.expression.expression) &&
+					stub.initializer.expression.expression.text === reactModuleNames.get('default*') &&
+					stub.initializer.expression.name.text === 'createClass'
+				)
+			) {
+				const propTypes = body.properties.find(node =>
+					ts.isPropertyAssignment(node) && ts.isIdentifier(node.name) && node.name.text === 'propTypes') as ts.PropertyAssignment
+				const getDefaultProps = body.properties.find(node =>
+					ts.isMethodDeclaration(node) && ts.isIdentifier(node.name) && node.name.text === 'getDefaultProps') as ts.MethodDeclaration
+				const getInitialState = body.properties.find(node =>
+					ts.isMethodDeclaration(node) && ts.isIdentifier(node.name) && node.name.text === 'getInitialState') as ts.MethodDeclaration
+				const otherMembers = _.difference(body.properties, [propTypes, getDefaultProps, getInitialState])
+
+				results.push({
+					name: stub.name.text,
+					rootNode: node,
+					propTypes: propTypes ? propTypes.initializer : undefined,
+					getDefaultProps: ( // TODO: support immediate function
+						getDefaultProps &&
+						getDefaultProps.body &&
+						getDefaultProps.body.statements.length === 1 &&
+						ts.isReturnStatement(getDefaultProps.body.statements[0])
+					) ? (getDefaultProps.body.statements[0] as ts.ReturnStatement).expression : undefined,
+					getInitialState: getInitialState ? getInitialState.body : undefined,
+					otherMembers,
+				})
+				return results
+			}
+		}
+	}
+)(node)
 
 const hasReturnJSX = createNodeMatcher(
 	() => false,

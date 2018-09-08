@@ -1,6 +1,6 @@
 import React from 'react'
 
-const myComponent = React.createClass({
+const MyComponent = React.createClass({
 	getInitialState() {
 		return {
 			counter: 0
@@ -22,4 +22,4 @@ const myComponent = React.createClass({
 	}
 })
 
-export default myComponent
+export default MyComponent
