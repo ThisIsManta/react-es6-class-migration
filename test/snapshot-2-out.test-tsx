@@ -27,16 +27,16 @@ optionalMessage?: Message
 optionalEnum?: "News" | "Photos"
 
 // An object that could be one of many types
-optionalUnion?: Message
+optionalUnion?: string | number | Message
 
 // An array of a certain type
-optionalArrayOf?: number
+optionalArrayOf?: Array<number>
 
 // An object with property values of a certain type
-optionalObjectOf?: number
+optionalObjectOf?: { [string]: number }
 
 // An object taking on a particular shape
-optionalObjectWithShape?: number
+optionalObjectWithShape?: { color: string, fontSize: number }
 
 // You can chain any of the above with `isRequired` to make sure a warning
 // is shown if the prop isn't provided.
