@@ -1,6 +1,7 @@
 import * as _ from 'lodash'
 import * as ts from 'typescript'
-import { createNodeMatcher, findPropTypeModuleName } from './migrateReactClass'
+import { findPropTypeModuleName } from './migrateReactClass'
+import { createNodeMatcher } from './createNodeMatcher'
 
 export default function (originalCode: string) {
 	const codeTree = ts.createSourceFile('file.tsx', originalCode, ts.ScriptTarget.ESNext, true)
