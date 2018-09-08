@@ -36,12 +36,12 @@ export default function (originalCode: string, fileType: 'jsx' | 'tsx') {
 		component.bodyText = addThisReference(component.bodyText, component.contextNode, fileType)
 
 		let superClass: string
-		if (reactModule.has('PureComponent') && propsContainMutableTypes === false) {
-			superClass = reactModule.get('PureComponent')
-		} else if (reactModule.has('Component')) {
-			superClass = reactModule.get('Component')
+		if (reactModule.name.has('PureComponent') && propsContainMutableTypes === false) {
+			superClass = reactModule.name.get('PureComponent')
+		} else if (reactModule.name.has('Component')) {
+			superClass = reactModule.name.get('Component')
 		} else {
-			superClass = reactModule.get('default*') + '.' + (propsContainMutableTypes ? '' : 'Pure') + 'Component'
+			superClass = reactModule.name.get('default*') + '.' + (propsContainMutableTypes ? '' : 'Pure') + 'Component'
 		}
 
 		const newText = [
@@ -199,9 +199,9 @@ const findAttachments = (node: ts.SourceFile) => createNodeMatcher<Array<Attachm
 	}
 )(node)
 
-export const findReactModule = createNodeMatcher<Map<string, string>>(
-	() => new Map<string, string>(),
-	(node, importedNameDict) => {
+export const findReactModule = createNodeMatcher<{ node: ts.ImportDeclaration, name: Map<string, string> }>(
+	() => ({ node: null, name: new Map<string, string>() }),
+	(node, result) => {
 		if (
 			ts.isImportDeclaration(node) &&
 			ts.isStringLiteral(node.moduleSpecifier) &&
@@ -209,14 +209,14 @@ export const findReactModule = createNodeMatcher<Map<string, string>>(
 			node.importClause
 		) {
 			if (node.importClause.name) {
-				importedNameDict.set('default*', node.importClause.name.text)
+				result.name.set('default*', node.importClause.name.text)
 			}
 			if (node.importClause.namedBindings && ts.isNamedImports(node.importClause.namedBindings)) {
 				node.importClause.namedBindings.elements.forEach(node => {
-					importedNameDict.set(node.propertyName ? node.propertyName.text : node.name.text, node.name.text)
+					result.name.set(node.propertyName ? node.propertyName.text : node.name.text, node.name.text)
 				})
 			}
-			return importedNameDict
+			return { node, name: result.name }
 		}
 	}
 )

@@ -6,10 +6,14 @@ import { createNodeMatcher } from './createNodeMatcher'
 export default function (originalCode: string) {
 	const codeTree = ts.createSourceFile('file.tsx', originalCode, ts.ScriptTarget.ESNext, true)
 
+	let modifiedCode = originalCode
+
 	const reactModule = findReactModule(codeTree)
 	const propTypeModule = findPropTypeModule(codeTree)
 
-	const classListWithoutPropDefinitions = findClassListWithoutPropDefinitions(codeTree, reactModule)
+	let reactNodeMustBeImported = false
+
+	const classListWithoutPropDefinitions = findClassListWithoutPropDefinitions(codeTree, reactModule.name)
 
 	_.forEachRight(classListWithoutPropDefinitions, classNode => {
 		const staticPropType = findStaticPropType(classNode.members)
@@ -18,7 +22,7 @@ export default function (originalCode: string) {
 		}
 
 		// Remove the old `static propTypes = { ... }`
-		originalCode = originalCode.substring(0, staticPropType.node.pos) + originalCode.substring(staticPropType.node.end)
+		modifiedCode = modifiedCode.substring(0, staticPropType.node.pos) + modifiedCode.substring(staticPropType.node.end)
 
 		const propList = []
 		_.forEach(staticPropType.members, workNode => {
@@ -52,15 +56,46 @@ export default function (originalCode: string) {
 			cursor -= 1
 			propText = '<' + propText + '>'
 		}
-		originalCode = originalCode.substring(0, cursor) + propText + originalCode.substring(cursor)
+		modifiedCode = modifiedCode.substring(0, cursor) + propText + modifiedCode.substring(cursor)
 	})
+
+	const modificationList: Array<[ts.Node, () => void]> = []
+
+	// Insert `{ ReactNode }` into `import React, { ... } from 'react'`
+	if (reactNodeMustBeImported) {
+		modificationList.push([
+			reactModule.node,
+			() => {
+				if (reactModule.node.importClause.namedBindings && ts.isNamedImports(reactModule.node.importClause.namedBindings)) {
+					const importClauseText = reactModule.node.importClause.namedBindings.getText()
+					const listHasTrailingComma = /,\s*}$/.test(importClauseText)
+					const insertionIndex = reactModule.node.importClause.namedBindings.end - 1
+					modifiedCode = modifiedCode.substring(0, insertionIndex) + (listHasTrailingComma ? ' ' : ', ') + 'ReactNode' + modifiedCode.substring(insertionIndex)
+
+				} else {
+					const insertionIndex = reactModule.node.importClause.name.end
+					modifiedCode = modifiedCode.substring(0, insertionIndex) + ', ReactNode' + modifiedCode.substring(insertionIndex)
+				}
+			}
+		])
+	}
 
 	// Delete `import PropTypes from 'prop-types'`
 	if (propTypeModule.node) {
-		originalCode = originalCode.substring(0, propTypeModule.node.pos) + originalCode.substring(propTypeModule.node.end)
+		modificationList.push([
+			propTypeModule.node,
+			() => {
+				modifiedCode = modifiedCode.substring(0, propTypeModule.node.pos) + modifiedCode.substring(propTypeModule.node.end)
+			}
+		])
 	}
 
-	return originalCode
+	_.chain(modificationList)
+		.sortBy(([node]) => node.pos)
+		.forEachRight(([node, action]) => { action() })
+		.value()
+
+	return modifiedCode
 
 	function getCorrespondingTypeDefinition(workNode: ts.Node) {
 		const propNode = findPropType(workNode, propTypeModule.name)
@@ -76,8 +111,15 @@ export default function (originalCode: string) {
 		} else if (corrType === 'array') {
 			corrType = 'Array<any>'
 		} else if (propNode.name.text === 'node') {
-			// TODO: add `{ ReactNode }` to the import statement
-			corrType = (reactModule.has('default*') ? reactModule.get('default*') + '.' : '') + 'ReactNode'
+			if (reactModule.name.has('ReactNode')) {
+				corrType = 'ReactNode'
+			} else if (reactModule.name.has('default*')) {
+				corrType = reactModule.name.get('default*') + '.'
+			} else {
+				corrType = 'ReactNode'
+				reactNodeMustBeImported = true
+				reactModule.name.set('ReactNode', 'ReactNode')
+			}
 		} else if (propNode.name.text === 'element') {
 			corrType = 'JSX.Element'
 		}
@@ -133,7 +175,7 @@ export default function (originalCode: string) {
 	}
 }
 
-const findClassListWithoutPropDefinitions = (node: ts.Node, reactModule: Map<string, string>) => createNodeMatcher<Array<ts.ClassDeclaration>>(
+const findClassListWithoutPropDefinitions = (node: ts.Node, reactModuleNames: Map<string, string>) => createNodeMatcher<Array<ts.ClassDeclaration>>(
 	() => [],
 	(node, results) => {
 		if (
@@ -149,15 +191,15 @@ const findClassListWithoutPropDefinitions = (node: ts.Node, reactModule: Map<str
 				(
 					ts.isPropertyAccessExpression(stub.expression) &&
 					ts.isIdentifier(stub.expression.expression) &&
-					reactModule.has('default*') &&
-					stub.expression.expression.text === reactModule.get('default*') &&
+					reactModuleNames.has('default*') &&
+					stub.expression.expression.text === reactModuleNames.get('default*') &&
 					(stub.expression.name.text === 'Component' || stub.expression.name.text === 'PureComponent')
 				) ||
 				(
 					ts.isIdentifier(stub.expression) &&
 					(
-						stub.expression.text === reactModule.get('Component') ||
-						stub.expression.text === reactModule.get('PureComponent')
+						stub.expression.text === reactModuleNames.get('Component') ||
+						stub.expression.text === reactModuleNames.get('PureComponent')
 					)
 				)
 			) {
