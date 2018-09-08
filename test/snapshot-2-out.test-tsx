@@ -1,6 +1,6 @@
 import React from 'react'
 
-export default class myComponent extends React.Component<{
+export default class MyComponent extends React.Component<{
 // You can declare that a prop is a specific JS primitive. By default, these
 // are all optional.
 optionalArray?: Array<any>

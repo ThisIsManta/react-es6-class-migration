@@ -22,7 +22,15 @@ for (const fileName of fileList) {
 	const worker = cp.spawnSync('node', ['./edge/command.js', filePath], { encoding: 'utf-8' })
 	const output = worker.stdout.toString().trim()
 
-	const expect = fs.readFileSync(`./test/snapshot-${caseNumb}-out${fp.extname(fileName)}`, { encoding: 'utf-8' }).trim()
+	const expectFilePath = `./test/snapshot-${caseNumb}-out${fp.extname(fileName)}`
+
+	// Create the output file, if not exist
+	if (fs.existsSync(expectFilePath) === false) {
+		fs.writeFileSync(expectFilePath, output, 'utf-8')
+		continue
+	}
+
+	const expect = fs.readFileSync(expectFilePath, { encoding: 'utf-8' }).trim()
 
 	const outputLines = output.split(/\r?\n/).map(line => line.replace(/^\s*/g, '·').replace(/\t/g, '¬') + '¶')
 	const expectLines = expect.split(/\r?\n/).map(line => line.replace(/^\s*/g, '·').replace(/\t/g, '¬') + '¶')
@@ -30,8 +38,8 @@ for (const fileName of fileList) {
 	for (let index = 0; index < bound - 1; index++) {
 		if (outputLines[index] !== expectLines[index]) {
 			console.log('The first difference is at line ' + (index + 1) + ':')
-			console.log('  ' + outputLines[index])
-			console.log('  ' + expectLines[index])
+			console.log('OUT:  ' + outputLines[index])
+			console.log('EXP:  ' + expectLines[index])
 			throw 'Error'
 		}
 	}

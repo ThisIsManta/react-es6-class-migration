@@ -1,18 +1,15 @@
 import * as _ from 'lodash'
 import * as ts from 'typescript'
-import { findReactModule, findPropTypeModule } from './migrateReactClass'
+import { findReactModule, findPropTypeModule, createNamedImport } from './migrateReactClass'
 import { createNodeMatcher } from './createNodeMatcher'
 
 export default function (originalCode: string) {
 	const codeTree = ts.createSourceFile('file.tsx', originalCode, ts.ScriptTarget.ESNext, true)
-
 	let modifiedCode = originalCode
+	const processingNodes: Array<{ start: number, end: number, replacement: string }> = []
 
 	const reactModule = findReactModule(codeTree)
 	const propTypeModule = findPropTypeModule(codeTree)
-
-	let reactNodeMustBeImported = false
-
 	const classListWithoutPropDefinitions = findClassListWithoutPropDefinitions(codeTree, reactModule.name)
 
 	_.forEachRight(classListWithoutPropDefinitions, classNode => {
@@ -59,40 +56,20 @@ export default function (originalCode: string) {
 		modifiedCode = modifiedCode.substring(0, cursor) + propText + modifiedCode.substring(cursor)
 	})
 
-	const modificationList: Array<[ts.Node, () => void]> = []
-
-	// Insert `{ ReactNode }` into `import React, { ... } from 'react'`
-	if (reactNodeMustBeImported) {
-		modificationList.push([
-			reactModule.node,
-			() => {
-				if (reactModule.node.importClause.namedBindings && ts.isNamedImports(reactModule.node.importClause.namedBindings)) {
-					const importClauseText = reactModule.node.importClause.namedBindings.getText()
-					const listHasTrailingComma = /,\s*}$/.test(importClauseText)
-					const insertionIndex = reactModule.node.importClause.namedBindings.end - 1
-					modifiedCode = modifiedCode.substring(0, insertionIndex) + (listHasTrailingComma ? ' ' : ', ') + 'ReactNode' + modifiedCode.substring(insertionIndex)
-
-				} else {
-					const insertionIndex = reactModule.node.importClause.name.end
-					modifiedCode = modifiedCode.substring(0, insertionIndex) + ', ReactNode' + modifiedCode.substring(insertionIndex)
-				}
-			}
-		])
-	}
-
 	// Delete `import PropTypes from 'prop-types'`
 	if (propTypeModule.node) {
-		modificationList.push([
-			propTypeModule.node,
-			() => {
-				modifiedCode = modifiedCode.substring(0, propTypeModule.node.pos) + modifiedCode.substring(propTypeModule.node.end)
-			}
-		])
+		processingNodes.push({
+			start: propTypeModule.node.pos,
+			end: propTypeModule.node.end, // Do not use `getEnd()` because it does not remove the line feed
+			replacement: ''
+		})
 	}
 
-	_.chain(modificationList)
-		.sortBy(([node]) => node.pos)
-		.forEachRight(([node, action]) => { action() })
+	_.chain(processingNodes)
+		.sortBy(item => item.start)
+		.forEachRight(item => {
+			modifiedCode = modifiedCode.substring(0, item.start) + item.replacement + modifiedCode.substring(item.end)
+		})
 		.value()
 
 	return modifiedCode
@@ -114,11 +91,11 @@ export default function (originalCode: string) {
 			if (reactModule.name.has('ReactNode')) {
 				corrType = 'ReactNode'
 			} else if (reactModule.name.has('default*')) {
-				corrType = reactModule.name.get('default*') + '.'
+				corrType = reactModule.name.get('default*') + '.ReactNode'
 			} else {
 				corrType = 'ReactNode'
-				reactNodeMustBeImported = true
 				reactModule.name.set('ReactNode', 'ReactNode')
+				processingNodes.push(createNamedImport(reactModule.node, 'ReactNode'))
 			}
 		} else if (propNode.name.text === 'element') {
 			corrType = 'JSX.Element'

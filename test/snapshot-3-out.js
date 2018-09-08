@@ -1,103 +1,71 @@
 import React from 'react'
 
 // Pick up different style of React stateless components
-class C extends React.PureComponent {
-static propTypes =  { text: React.PropTypes.string }
-
-static defaultProps =  { text: '123' }
-
+class A extends React.Component {
 render() {
 return <div />
 }
 }
-class C extends React.PureComponent {
-static propTypes =  { text: React.PropTypes.string }
-
-static defaultProps =  { text: '123' }
-
+class B extends React.Component {
 render() {
 return <div />
 }
 }
-class C extends React.PureComponent {
-static propTypes =  { text: React.PropTypes.string }
-
-static defaultProps =  { text: '123' }
-
+class C extends React.Component {
 render() {
 return <div />
 }
 }
-class C extends React.PureComponent {
-static propTypes =  { text: React.PropTypes.string }
-
-static defaultProps =  { text: '123' }
-
+class D extends React.Component {
 render() {
 return (<div />)
 }
 }
-class C extends React.PureComponent {
-static propTypes =  { text: React.PropTypes.string }
-
-static defaultProps =  { text: '123' }
-
+class E extends React.Component {
 render() {
 return <div />
 }
 }
 
 // Pick up non self-closing elements
-class C extends React.PureComponent {
-static propTypes =  { text: React.PropTypes.string }
-
-static defaultProps =  { text: '123' }
-
+class F extends React.Component {
 render() {
 return <div />
 }
 }
-class C extends React.PureComponent {
-static propTypes =  { text: React.PropTypes.string }
-
-static defaultProps =  { text: '123' }
-
+class G extends React.Component {
 render() {
 return <div></div>
 }
 }
-class F extends React.PureComponent {
+class H extends React.Component {
 render() {
 return (<div />)
 }
 }
-class F extends React.PureComponent {
+class I extends React.Component {
 render() {
 return (<div></div>)
 }
 }
 
 // Does not pick up inner stateless components
-class C extends React.PureComponent {
-static propTypes =  { text: React.PropTypes.string }
-
-static defaultProps =  { text: '123' }
-
+class J extends React.Component {
 render() {
-const F = () => <span></span>
+const K = () => <span></span>
 return <F />
 }
 }
 
 // Pick up prop-types
-class C extends React.PureComponent {
+class L extends React.Component {
 static propTypes =  { text: React.PropTypes.string }
 
 static defaultProps =  { text: '123' }
 
 render() {
 return (
-        <div>{this.props.text}</div>
+	<div>{this.props.text}</div>
 )
 }
 }

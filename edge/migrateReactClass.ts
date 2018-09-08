@@ -8,7 +8,7 @@ export default function (originalCode: string, fileType: 'jsx' | 'tsx') {
 	const codeTree = ts.createSourceFile('file.' + fileType, originalCode, ts.ScriptTarget.ESNext, true)
 	const components = findStatelessComponents(codeTree)
 	const attachments = findAttachments(codeTree)
-	const processingNodes: Array<{ start: number, end: number, replacement?: string }> = []
+	const processingNodes: Array<{ start: number, end: number, replacement: string }> = []
 
 	const reactModule = findReactModule(codeTree)
 	const propTypeModule = findPropTypeModule(codeTree)
@@ -17,7 +17,11 @@ export default function (originalCode: string, fileType: 'jsx' | 'tsx') {
 		const propTypes = attachments.find(item => item.componentName === component.componentName && item.fieldName === 'propTypes')
 		let propsContainMutableTypes = false
 		if (propTypes) {
-			processingNodes.push({ start: propTypes.rootNode.getStart(), end: propTypes.rootNode.getEnd() })
+			processingNodes.push({
+				start: propTypes.rootNode.getStart(),
+				end: propTypes.rootNode.getEnd(),
+				replacement: ''
+			})
 			propsContainMutableTypes = findPropTypes(propTypes.rootNode, propTypeModule.name).some(type => mutablePropType.test(type))
 		}
 
@@ -25,23 +29,47 @@ export default function (originalCode: string, fileType: 'jsx' | 'tsx') {
 
 		const defaultProps = attachments.find(item => item.componentName === component.componentName && item.fieldName === 'defaultProps')
 		if (defaultProps) {
-			processingNodes.push({ start: defaultProps.rootNode.getStart(), end: defaultProps.rootNode.getEnd() })
+			processingNodes.push({
+				start: defaultProps.rootNode.getStart(),
+				end: defaultProps.rootNode.getEnd(),
+				replacement: ''
+			})
 		}
 
 		const contextTypes = attachments.find(item => item.componentName === component.componentName && item.fieldName === 'contextTypes')
 		if (contextTypes) {
-			processingNodes.push({ start: contextTypes.rootNode.getStart(), end: contextTypes.rootNode.getEnd() })
+			processingNodes.push({
+				start: contextTypes.rootNode.getStart(),
+				end: contextTypes.rootNode.getEnd(),
+				replacement: ''
+			})
 		}
 
 		component.bodyText = addThisReference(component.bodyText, component.contextNode, fileType)
 
 		let superClass: string
-		if (reactModule.name.has('PureComponent') && propsContainMutableTypes === false) {
-			superClass = reactModule.name.get('PureComponent')
-		} else if (reactModule.name.has('Component')) {
-			superClass = reactModule.name.get('Component')
+		if (propsContainMutableTypes) {
+			if (reactModule.name.has('Component')) {
+				superClass = reactModule.name.get('Component')
+			} else if (reactModule.name.has('PureComponent')) {
+				superClass = 'Component'
+				reactModule.name.set('Component', 'Component')
+				processingNodes.push(createNamedImport(reactModule.node, 'Component'))
+			} else {
+				superClass = reactModule.name.get('default*') + '.PureComponent'
+			}
+
 		} else {
-			superClass = reactModule.name.get('default*') + '.' + (propsContainMutableTypes ? '' : 'Pure') + 'Component'
+			if (reactModule.name.has('PureComponent')) {
+				superClass = reactModule.name.get('PureComponent')
+			} else if (reactModule.name.has('Component')) {
+				superClass = 'PureComponent'
+				reactModule.name.set('PureComponent', 'PureComponent')
+				processingNodes.push(createNamedImport(reactModule.node, 'PureComponent'))
+
+			} else {
+				superClass = reactModule.name.get('default*') + '.Component'
+			}
 		}
 
 		const newText = [
@@ -56,14 +84,21 @@ export default function (originalCode: string, fileType: 'jsx' | 'tsx') {
 			`}`,
 			`}`,
 		].filter(line => line !== null).join('\n')
-		processingNodes.push({ start: component.rootNode.getStart(), end: component.rootNode.getEnd(), replacement: newText })
+		processingNodes.push({
+			start: component.rootNode.getStart(),
+			end: component.rootNode.getEnd(),
+			replacement: newText
+		})
 	}
 
-	let codeText = originalCode
-	for (const item of _.sortBy(processingNodes, item => -item.start)) {
-		codeText = codeText.substring(0, item.start) + (item.replacement || '') + codeText.substring(item.end)
-	}
-	return codeText
+	let modifiedCode = originalCode
+	_.chain(processingNodes)
+		.sortBy(item => item.start)
+		.forEachRight(item => {
+			modifiedCode = modifiedCode.substring(0, item.start) + item.replacement + modifiedCode.substring(item.end)
+		})
+		.value()
+	return modifiedCode
 }
 
 function addThisReference(bodyText: string, workNode: ts.ParameterDeclaration, fileType: string) {
@@ -266,3 +301,25 @@ const findIdentifiers = (node: ts.Node, name: string) => createNodeMatcher<Array
 		}
 	}
 )(node)
+
+export const createNamedImport = (node: ts.ImportDeclaration, name: string) => {
+	if (node.importClause.namedBindings && ts.isNamedImports(node.importClause.namedBindings)) {
+		const fullText = node.importClause.namedBindings.getText()
+		const trimText = _.trimEnd(_.trimEnd(_.trimEnd(fullText), '}'))
+		const listHasTrailingComma = trimText.endsWith(',')
+		const insertionIndex = node.importClause.namedBindings.getEnd() - (fullText.length - trimText.length)
+		return {
+			start: insertionIndex,
+			end: insertionIndex,
+			replacement: (listHasTrailingComma ? ' ' : ', ') + name
+		}
+
+	} else {
+		const insertionIndex = node.importClause.name.getEnd()
+		return {
+			start: insertionIndex,
+			end: insertionIndex,
+			replacement: ', ' + name
+		}
+	}
+}

@@ -1,27 +1,27 @@
 import React from 'react'
 
 // Pick up different style of React stateless components
-function C() { return <div /> }
-const C = function () { return <div /> }
+function A() { return <div /> }
+const B = function () { return <div /> }
 const C = () => <div />
-const C = () => (<div />)
-const C = () => { return <div /> }
+const D = () => (<div />)
+const E = () => { return <div /> }
 
 // Pick up non self-closing elements
-const C = () => <div />
-const C = () => <div></div>
-const F = () => (<div />)
-const F = () => (<div></div>)
+const F = () => <div />
+const G = () => <div></div>
+const H = () => (<div />)
+const I = () => (<div></div>)
 
 // Does not pick up inner stateless components
-const C = () => {
-	const F = () => <span></span>
+const J = () => {
+	const K = () => <span></span>
 	return <F />
 }
 
 // Pick up prop-types
-const C = (props) => (
+const L = (props) => (
 	<div>{props.text}</div>
 )
-C.propTypes = { text: React.PropTypes.string }
-C.defaultProps = { text: '123' }
+L.propTypes = { text: React.PropTypes.string }
+L.defaultProps = { text: '123' }
