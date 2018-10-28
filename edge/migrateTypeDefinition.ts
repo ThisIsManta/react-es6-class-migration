@@ -46,7 +46,7 @@ export default function (originalCode: string) {
 		const newLine = propList.some(item => item.startsWith('//'))
 		let propText = (
 			'{' + (newLine ? '\n' : ' ') +
-			propList.join(newLine ? '\n' : ', ') +
+			propList.join(newLine ? '\n' : '; ') +
 			(newLine ? '\n' : ' ') + '}'
 		)
 		if (classNode.heritageClauses[0].types[0].typeArguments === undefined) {
@@ -136,7 +136,7 @@ export default function (originalCode: string) {
 					'{ ' +
 					typeNode.properties
 						.map((node: ts.PropertyAssignment) => node.name.getText() + ': ' + getCorrespondingTypeDefinition(node.initializer).type)
-						.join(', ') +
+						.join('; ') +
 					' }'
 				)
 			}
