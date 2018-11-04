@@ -36,7 +36,7 @@ optionalArrayOf?: Array<number>
 optionalObjectOf?: { [string]: number }
 
 // An object taking on a particular shape
-optionalObjectWithShape?: { color: string, fontSize: number }
+optionalObjectWithShape?: { color: string; fontSize: number }
 
 // You can chain any of the above with `isRequired` to make sure a warning
 // is shown if the prop isn't provided.
