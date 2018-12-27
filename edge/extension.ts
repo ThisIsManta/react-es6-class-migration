@@ -20,7 +20,10 @@ export function activate(context) {
 			const currentFileIsTypeScript = document.languageId === 'typescriptreact'
 			const currentFileWilBeRenamedToTypeScript = !currentFileIsTypeScript && await checkIfUserWantsToConvertToTypeScript()
 			if (currentFileIsTypeScript || currentFileWilBeRenamedToTypeScript) {
-				modifiedCode = migrateTypeDefinition(modifiedCode)
+				const lineFeed = document.eol === vscode.EndOfLine.CRLF ? '\r\n' : '\n'
+				const indentation = editor.options.insertSpaces === true ? ' '.repeat(parseInt(editor.options.tabSize.toString())) : '\t'
+
+				modifiedCode = migrateTypeDefinition(modifiedCode, { lineFeed, indentation })
 			}
 
 			if (originalCode !== modifiedCode) {
@@ -28,14 +31,12 @@ export function activate(context) {
 					new vscode.Range(new vscode.Position(0, 0), document.lineAt(document.lineCount - 1).range.end),
 					modifiedCode
 				))
-
-				await vscode.commands.executeCommand('editor.action.formatDocument')
 			}
 
 			if (currentFileWilBeRenamedToTypeScript) {
-				vscode.window.withProgress({ title: 'Converting to TypeScript React', location: vscode.ProgressLocation.Notification, cancellable: true }, async (progress, cancellationToken) => {
+				await vscode.window.withProgress({ title: 'Converting to TypeScript React', location: vscode.ProgressLocation.Notification, cancellable: true }, async (progress, cancellationToken) => {
 					await document.save()
-					
+
 					if (cancellationToken.isCancellationRequested) {
 						return
 					}
@@ -51,7 +52,11 @@ export function activate(context) {
 					await vscode.commands.executeCommand('workbench.action.closeActiveEditor')
 					await vscode.window.showTextDocument(await vscode.workspace.openTextDocument(newFilePath), editor.viewColumn)
 				})
+
+				await new Promise(resolve => { setTimeout(resolve, 1500) })
 			}
+
+			await vscode.commands.executeCommand('editor.action.formatDocument')
 
 		} catch (error) {
 			vscode.window.showErrorMessage(error.message)

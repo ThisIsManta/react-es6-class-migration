@@ -3,7 +3,7 @@ import * as ts from 'typescript'
 import { findReactModule, findPropTypeModule, createNamedImport } from './migrateReactClass'
 import { createNodeMatcher } from './createNodeMatcher'
 
-export default function (originalCode: string) {
+export default function (originalCode: string, { lineFeed, indentation }: { lineFeed: string, indentation: string }) {
 	const codeTree = ts.createSourceFile('file.tsx', originalCode, ts.ScriptTarget.ESNext, true)
 	let modifiedCode = originalCode
 	const processingNodes: Array<{ start: number, end: number, replacement: string }> = []
@@ -43,11 +43,11 @@ export default function (originalCode: string) {
 		})
 
 		let cursor = classNode.heritageClauses[0].types[0].expression.end + 1
-		const newLine = propList.some(item => item.startsWith('//'))
+		const newLineNeeded = propList.some(item => item.startsWith('//'))
 		let propText = (
-			'{' + (newLine ? '\n' : ' ') +
-			propList.join(newLine ? '\n' : '; ') +
-			(newLine ? '\n' : ' ') + '}'
+			'{' + (newLineNeeded ? lineFeed + indentation : ' ') +
+			propList.join(newLineNeeded ? lineFeed + indentation : '; ') +
+			(newLineNeeded ? lineFeed : ' ') + '}'
 		)
 		if (classNode.heritageClauses[0].types[0].typeArguments === undefined) {
 			cursor -= 1
