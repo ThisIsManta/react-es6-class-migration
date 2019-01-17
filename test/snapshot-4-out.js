@@ -16,3 +16,14 @@ render() {
 return <div>{this.props.children}</div>
 }
 }
+
+
+class C extends Component {
+static propTypes =  {
+	children: PropTypes.node.isRequired
+}
+
+render() {
+return <div>{this.props.children}</div>
+}
+}

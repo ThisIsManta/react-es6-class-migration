@@ -168,7 +168,7 @@ function addThisReference(bodyText: string, propNode: ts.ParameterDeclaration, f
 			.sortBy(node => -node.getStart())
 			.value()
 		for (const node of nodeList) {
-			bodyText = bodyText.substring(0, node.getStart()) + 'this.context.' + node.text + bodyText.substring(node.getEnd())
+			bodyText = bodyText.substring(0, node.getStart()) + 'this.props.' + node.text + bodyText.substring(node.getEnd())
 		}
 	}
 	return bodyText
