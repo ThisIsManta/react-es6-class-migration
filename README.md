@@ -12,6 +12,8 @@ class MyComponent extends React.Component {
 		children: PropTypes.node.isRequired,
 	}
 
+	state = { visible: false }
+
 	render() {
 		return <div></div>
 	}
@@ -21,7 +23,13 @@ class MyComponent extends React.Component {
 class MyComponent extends React.Component<{
 	className?: string
 	children: React.ReactNode
-}> {
+}, { visible: boolean }> {
+	constructor(props) {
+		super(props)
+
+		this.state = { visible: false }
+	}
+
 	render() {
 		return <div></div>
 	}

@@ -5,13 +5,20 @@ import { createNodeMatcher } from './createNodeMatcher'
 
 export default function (originalCode: string, { lineFeed, indentation }: { lineFeed: string, indentation: string }) {
 	const codeTree = ts.createSourceFile('file.tsx', originalCode, ts.ScriptTarget.ESNext, true)
-	let modifiedCode = originalCode
 	const processingNodes: Array<{ start: number, end: number, replacement: string }> = []
 
-	const reactModule = findReactModule(codeTree)
+	// Delete `import PropTypes from 'prop-types'`
 	const propTypeModule = findPropTypeModule(codeTree)
-	const classListWithoutPropDefinitions = findClassListWithoutPropDefinitions(codeTree, reactModule.name)
+	if (propTypeModule.node) {
+		processingNodes.push({
+			start: propTypeModule.node.pos,
+			end: propTypeModule.node.end, // Do not use `getEnd()` because it does not remove the line feed
+			replacement: ''
+		})
+	}
 
+	const reactModule = findReactModule(codeTree)
+	const classListWithoutPropDefinitions = findClassListWithoutPropDefinitions(codeTree, reactModule.name)
 	_.forEachRight(classListWithoutPropDefinitions, classNode => {
 		const staticPropType = findStaticPropType(classNode.members)
 		if (!staticPropType) {
@@ -19,9 +26,13 @@ export default function (originalCode: string, { lineFeed, indentation }: { line
 		}
 
 		// Remove the old `static propTypes = { ... }`
-		modifiedCode = modifiedCode.substring(0, staticPropType.node.pos) + modifiedCode.substring(staticPropType.node.end)
+		processingNodes.push({
+			start: staticPropType.node.pos,
+			end: staticPropType.node.end,
+			replacement: ''
+		})
 
-		const propList = []
+		const propList: Array<string> = []
 		_.forEach(staticPropType.members, workNode => {
 			if (ts.isPropertyAssignment(workNode) === false) {
 				return null
@@ -43,36 +54,66 @@ export default function (originalCode: string, { lineFeed, indentation }: { line
 		})
 
 		let cursor = classNode.heritageClauses[0].types[0].expression.end + 1
-		const newLineNeeded = propList.some(item => item.startsWith('//'))
-		let propText = (
-			'{' + (newLineNeeded ? lineFeed + indentation : ' ') +
+		const newLineNeeded = propList.length > 1 || propList.some(item => item.startsWith('//'))
+		let classType = (
+			'{' +
+			(newLineNeeded ? lineFeed + indentation : ' ') +
 			propList.join(newLineNeeded ? lineFeed + indentation : '; ') +
-			(newLineNeeded ? lineFeed : ' ') + '}'
+			(newLineNeeded ? lineFeed : ' ') +
+			'}'
 		)
+
+		const stateNode = findStateInitialization(classNode)
+		if (stateNode) {
+			// Wrap `state = {}` in a constructor
+			const stateInitializer = lineFeed +
+				indentation + 'constructor(props) {' + lineFeed +
+				indentation + indentation + 'super(props)' + lineFeed +
+				lineFeed +
+				indentation + indentation + 'this.' + stateNode.getText().split(lineFeed).join(lineFeed + indentation) + lineFeed +
+				indentation + '}'
+			processingNodes.push({
+				start: stateNode.pos,
+				end: stateNode.end,
+				replacement: stateInitializer
+			})
+
+			if (ts.isObjectLiteralExpression(stateNode.initializer)) {
+				const stateList = _.compact(stateNode.initializer.properties.map(node => {
+					if (ts.isPropertyAssignment(node) && ts.isIdentifier(node.name)) {
+						return node.name.text + ': ' + getLiteralTypeDefinition(node.initializer).join(' | ')
+					}
+				}))
+				const newLineNeeded = stateList.length > 1
+				classType += (
+					', {' +
+					(newLineNeeded ? lineFeed + indentation : ' ') +
+					stateList.join(newLineNeeded ? lineFeed + indentation : '; ') +
+					(newLineNeeded ? lineFeed : ' ') +
+					'}'
+				)
+			}
+		}
+
+		// Add prop-type and also state-type definition
 		if (classNode.heritageClauses[0].types[0].typeArguments === undefined) {
 			cursor -= 1
-			propText = '<' + propText + '>'
+			classType = '<' + classType + '>'
 		}
-		modifiedCode = modifiedCode.substring(0, cursor) + propText + modifiedCode.substring(cursor)
+		processingNodes.push({
+			start: cursor,
+			end: cursor,
+			replacement: classType
+		})
 	})
 
-	// Delete `import PropTypes from 'prop-types'`
-	if (propTypeModule.node) {
-		processingNodes.push({
-			start: propTypeModule.node.pos,
-			end: propTypeModule.node.end, // Do not use `getEnd()` because it does not remove the line feed
-			replacement: ''
-		})
-	}
-
-	_.chain(processingNodes)
+	return _.chain(processingNodes)
 		.sortBy(item => item.start)
-		.forEachRight(item => {
-			modifiedCode = modifiedCode.substring(0, item.start) + item.replacement + modifiedCode.substring(item.end)
-		})
+		.reverse()
+		.reduce((modifiedCode, item) => {
+			return modifiedCode.substring(0, item.start) + item.replacement + modifiedCode.substring(item.end)
+		}, originalCode)
 		.value()
-
-	return modifiedCode
 
 	function getCorrespondingTypeDefinition(workNode: ts.Node) {
 		const propNode = findPropType(workNode, propTypeModule.name)
@@ -152,6 +193,75 @@ export default function (originalCode: string, { lineFeed, indentation }: { line
 	}
 }
 
+function getLiteralTypeDefinition(workNode: ts.Node): Array<string> {
+	if (ts.isStringLiteral(workNode) || ts.isTemplateExpression(workNode) || ts.isNoSubstitutionTemplateLiteral(workNode)) {
+		return ['string']
+
+	} else if (ts.isNumericLiteral(workNode) || ts.isIdentifier(workNode) && (workNode.text === 'NaN' || workNode.text === 'Infinity')) {
+		return ['number']
+
+	} else if (workNode.kind === ts.SyntaxKind.TrueKeyword || workNode.kind === ts.SyntaxKind.FalseKeyword) {
+		return ['boolean']
+
+	} else if (workNode.kind === ts.SyntaxKind.NullKeyword) {
+		return ['null']
+
+	} else if (ts.isArrayLiteralExpression(workNode)) {
+		if (workNode.elements.length === 0) {
+			return ['Array<any>']
+		}
+		return [
+			'Array<' +
+			_.chain(workNode.elements)
+				.map(node => getLiteralTypeDefinition(node))
+				.flatten()
+				.compact()
+				.uniq()
+				.value()
+				.join(' | ') +
+			'>'
+		]
+
+	} else if (ts.isObjectLiteralExpression(workNode)) {
+		if (workNode.properties.length === 0) {
+			return ['object']
+		}
+
+		return [
+			'{' +
+			_.chain(workNode.properties)
+				.map(node => {
+					if (ts.isPropertyAssignment(node) && ts.isIdentifier(node.name)) {
+						return node.name.text + ': ' + getLiteralTypeDefinition(node.initializer).join(' | ')
+					}
+				})
+				.compact().value().join('; ') +
+			'}'
+		]
+
+	} else if (ts.isPrefixUnaryExpression(workNode) && workNode.getFirstToken().kind === ts.SyntaxKind.ExclamationToken) {
+		return ['boolean']
+
+	} else if (ts.isBinaryExpression(workNode)) {
+		const types = _.without(_.uniq([
+			...getLiteralTypeDefinition(workNode.left),
+			...getLiteralTypeDefinition(workNode.right),
+		]), 'any')
+		switch (workNode.operatorToken.kind) {
+			case ts.SyntaxKind.BarBarToken:
+				if (types.length > 0) {
+					return types
+				}
+			case ts.SyntaxKind.PlusToken:
+				if (types.some(dataType => dataType === 'string')) {
+					return ['string']
+				}
+		}
+	}
+
+	return ['any']
+}
+
 const findClassListWithoutPropDefinitions = (node: ts.Node, reactModuleNames: Map<string, string>) => createNodeMatcher<Array<ts.ClassDeclaration>>(
 	() => [],
 	(node, results) => {
@@ -214,6 +324,20 @@ const findPropType = (node: ts.Node, moduleName: string) => createNodeMatcher<ts
 			ts.isPropertyAccessExpression(node) &&
 			ts.isIdentifier(node.expression) &&
 			node.expression.text === moduleName
+		) {
+			return node
+		}
+	}
+)(node)
+
+const findStateInitialization = (node: ts.ClassDeclaration) => createNodeMatcher<ts.PropertyDeclaration>(
+	() => undefined,
+	(node) => {
+		if (
+			ts.isPropertyDeclaration(node) &&
+			ts.isIdentifier(node.name) &&
+			node.name.text === 'state' &&
+			ts.isObjectLiteralExpression(node.initializer)
 		) {
 			return node
 		}
