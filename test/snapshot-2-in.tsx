@@ -56,4 +56,24 @@ export default class MyComponent extends React.Component {
 	}
 
 	static defaultProps = {}
+
+	state = {
+		a: '',
+		b: ``,
+		c: `+${this.props.a}`,
+		d: 1,
+		e: NaN,
+		f: Infinity,
+		g: true,
+		h: false,
+		i: null,
+		j: [],
+		k: ['', 0, false, null],
+		l: {},
+		m: { a: '', b: 0, c: false, d: null },
+		n: !this.props.a,
+		o: this.props.a || '',
+		p: this.props.a + '',
+		q: this.props.a,
+	}
 }

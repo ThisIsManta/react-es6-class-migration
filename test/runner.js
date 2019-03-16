@@ -34,13 +34,13 @@ for (const fileName of fileList) {
 
 	const outputLines = output.split(/\r?\n/).map(line => line.replace(/^\s*/g, '·').replace(/\t/g, '¬') + '¶')
 	const expectLines = expect.split(/\r?\n/).map(line => line.replace(/^\s*/g, '·').replace(/\t/g, '¬') + '¶')
-	const bound = _.min([outputLines.length, expectLines.length])
+	const bound = _.max([outputLines.length, expectLines.length])
 	for (let index = 0; index < bound - 1; index++) {
 		if (outputLines[index] !== expectLines[index]) {
 			console.log('The first difference is at line ' + (index + 1) + ':')
-			console.log('OUT:  ' + outputLines[index])
-			console.log('EXP:  ' + expectLines[index])
-			throw 'Error'
+			console.log('Output: ' + (outputLines[index] || ''))
+			console.log('Expect: ' + (expectLines[index] || ''))
+			throw new Error('Failed testing ' + fileName)
 		}
 	}
 }

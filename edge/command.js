@@ -15,14 +15,24 @@ _.chain(process.argv)
 	.map(para => glob.sync(para))
 	.flatten()
 	.forEach(path => {
-		// Note that "_" in "._tsx" is to prevent TypeScript compilation error due to invalid TSX file content
 		const fileType = /\.(?:test-)?tsx$/.test(fp.extname(path)) ? 'tsx' : 'jsx'
 
 		const originalCode = fs.readFileSync(path, { encoding: 'utf-8' })
 		let modifiedCode = migrateReactClass(originalCode, fileType)
 
 		if (fileType === 'tsx') {
-			modifiedCode = migrateTypeDefinition(modifiedCode)
+			const lineFeed = /\r\n/.test(originalCode) ? '\r\n' : '\n'
+			let indentation = '\t'
+			if (/^\t/m.test(originalCode) === false) {
+				indentation = _.chain(originalCode.split(lineFeed))
+					.map(line => line.match(/^\s*/))
+					.compact()
+					.map(([space]) => space.length)
+					.min()
+					.value()
+			}
+
+			modifiedCode = migrateTypeDefinition(modifiedCode, { lineFeed, indentation })
 		}
 
 		if (replaceOriginal) {

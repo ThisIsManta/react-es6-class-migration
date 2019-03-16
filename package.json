@@ -38,8 +38,8 @@
 	"scripts": {
 		"postinstall": "node ./node_modules/vscode/bin/install",
 		"compile": "tsc --watch --project ./",
-		"test": "tsc && node ./test/runner.js",
-		"vscode:prepublish": "tsc --skipLibCheck --project ./ & npm test",
+		"test": "npm compile & node ./test/runner.js",
+		"vscode:prepublish": "npm test",
 		"preversion": "git push --dry-run origin master:master",
 		"version": "vsce publish",
 		"postversion": "git push --tags --quiet origin master:master"
