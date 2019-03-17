@@ -65,21 +65,24 @@ export default function (originalCode: string, { lineFeed, indentation }: { line
 
 		const stateNode = findStateInitialization(classNode)
 		if (stateNode) {
-			// Wrap `state = {}` in a constructor
-			const stateInitializer = lineFeed +
-				indentation + 'constructor(props) {' + lineFeed +
-				indentation + indentation + 'super(props)' + lineFeed +
-				lineFeed +
-				indentation + indentation + 'this.' + stateNode.getText().split(lineFeed).join(lineFeed + indentation) + lineFeed +
-				indentation + '}'
-			processingNodes.push({
-				start: stateNode.pos,
-				end: stateNode.end,
-				replacement: stateInitializer
-			})
+			// Wrap `state = {}` onto a constructor
+			if (ts.isPropertyDeclaration(stateNode)) {
+				const stateInitializer = lineFeed +
+					indentation + 'constructor(props) {' + lineFeed +
+					indentation + indentation + 'super(props)' + lineFeed +
+					lineFeed +
+					indentation + indentation + 'this.' + stateNode.getText().split(lineFeed).join(lineFeed + indentation) + lineFeed +
+					indentation + '}'
+				processingNodes.push({
+					start: stateNode.pos,
+					end: stateNode.end,
+					replacement: stateInitializer
+				})
+			}
 
-			if (ts.isObjectLiteralExpression(stateNode.initializer)) {
-				const stateList = _.compact(stateNode.initializer.properties.map(node => {
+			const objectNode = ts.isPropertyDeclaration(stateNode) ? stateNode.initializer : stateNode
+			if (ts.isObjectLiteralExpression(objectNode)) {
+				const stateList = _.compact(objectNode.properties.map(node => {
 					if (ts.isPropertyAssignment(node) && ts.isIdentifier(node.name)) {
 						return node.name.text + ': ' + getLiteralTypeDefinition(node.initializer).join(' | ')
 					}
@@ -330,7 +333,7 @@ const findPropType = (node: ts.Node, moduleName: string) => createNodeMatcher<ts
 	}
 )(node)
 
-const findStateInitialization = (node: ts.ClassDeclaration) => createNodeMatcher<ts.PropertyDeclaration>(
+const findStateInitialization = (node: ts.ClassDeclaration) => createNodeMatcher<ts.PropertyDeclaration | ts.ObjectLiteralExpression>(
 	() => undefined,
 	(node) => {
 		if (
@@ -340,6 +343,21 @@ const findStateInitialization = (node: ts.ClassDeclaration) => createNodeMatcher
 			ts.isObjectLiteralExpression(node.initializer)
 		) {
 			return node
+		}
+
+		if (ts.isConstructorDeclaration(node)) {
+			for (const statement of node.body.statements) {
+				if (
+					ts.isExpressionStatement(statement) &&
+					ts.isBinaryExpression(statement.expression) &&
+					ts.isPropertyAccessExpression(statement.expression.left) &&
+					statement.expression.left.expression.kind === ts.SyntaxKind.ThisKeyword &&
+					statement.expression.left.name.text === 'state' &&
+					ts.isObjectLiteralExpression(statement.expression.right)
+				) {
+					return statement.expression.right
+				}
+			}
 		}
 	}
 )(node)
